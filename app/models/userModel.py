@@ -54,7 +54,7 @@ class CreateUserModel(BaseModel):
     email: EmailStr
     phone: Optional[str] = None
     password: Optional[str] = None
-    dateOfBirth: Optional[str] = None
+    dateOfBirth: date = None
 
 # Model lưu trữ thông tin chuẩn đoán (không cần _id)
 class CreateDiagnoseModel(BaseModel):
