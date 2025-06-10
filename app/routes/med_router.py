@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File,Query,Body,Form
 from app.controller.med_controller import start_diagnois,get_diagnosis_result,get_differentiation_questions,submit_differation_questions,knowledge,submit_user_description
 from fastapi.responses import JSONResponse
+from app.models.userModel import PostUserDescriptionModel
 router = APIRouter()
 
 @router.post("/start-diagnosis")
@@ -21,11 +22,11 @@ async def get_questions(key: str = Query(...)):
 
 @router.post("/submit-user-description")
 async def submit_user_description_route(
-    key: str = Query(..., description="Key của kết quả đã lưu"),
-    user_description: str = Body(..., description="Mô tả của người dùng về triệu chứng")
+    user_description: PostUserDescriptionModel = Body(..., description="Mô tả của người dùng về triệu chứng"),
+    key: str = Query(..., description="Key của kết quả đã lưu")
 ):
     """
-    Gửi mô tả triệu chứng từ người dùng để phân tích.
+    Gửi mô tả triệu chứng từ người dùng để cải thiện độ chính xác của chuẩn đoán.
     """
     await submit_user_description(user_description=user_description, key=key)
     return {"message": "Đã xử lý mô tả triệu chứng thành công"}

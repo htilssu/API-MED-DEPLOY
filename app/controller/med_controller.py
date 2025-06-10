@@ -45,7 +45,7 @@ login(token=os.getenv("HUGGINGFACE_TOKEN"))
 # Cấu hình GCS và các đường dẫn
 GCS_BUCKET = "kltn-2025"
 GCS_IMAGE_PATH = "uploaded_images/"
-GCS_KEY_PATH = storage.Client.from_service_account_json("app/gsc-key.json")
+GCS_KEY_PATH = storage.Client.from_service_account_json("app/test.json")
 VECTOR_FILE = "static/processed/embedded_vectors.json"
 GCS_FOLDER = "handle_data"
 GCS_DATASET = f"dataset"
@@ -76,6 +76,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
 vit_model = timm.create_model("vit_base_patch16_224", pretrained=True).to(device)
 vit_model.eval()
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 
@@ -101,7 +102,7 @@ def download_from_gcs():
 
 # Hàm upload file lên GCS
 def upload_to_gcs(local_path: str, destination_blob_name: str):
-    client = storage.Client.from_service_account_json("app/gsc-key.json")
+    client = storage.Client.from_service_account_json("app/test.json")
     bucket = client.bucket(GCS_BUCKET)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_path)
@@ -387,7 +388,7 @@ def append_disease_to_json(file_path: str, new_disease: dict):
     print(f"Added new disease: {new_disease.get('name', '')}")
 
 def upload_json_to_gcs(bucket_name: str, destination_blob_name: str, source_file_name: str):
-    client = storage.Client.from_service_account_json("app/gsc-key.json")
+    client = storage.Client.from_service_account_json("app/test.json")
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
@@ -554,7 +555,9 @@ async def start_diagnois(image: UploadFile = File(...),user_id: Optional[str] = 
     try:
         download_from_gcs()
         load_faiss_index()
-
+        #Kiểm ảnh truyền vào có phải là đuôi .jpg, .jpeg, .png
+        if not image.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+            raise HTTPException(status_code=400, detail="Ảnh phải có định dạng .jpg, .jpeg hoặc .png")
         image_data = await image.read()
 
         # Hash ảnh làm key (để không trùng lặp)

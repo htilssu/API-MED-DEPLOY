@@ -8,7 +8,12 @@ import uvicorn
 from app.db.mongo import ping_db
 
 
+
+
 load_dotenv()
+
+
+
 
 app = FastAPI()
 

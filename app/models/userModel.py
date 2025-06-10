@@ -67,3 +67,6 @@ class CreateDiagnoseModel(BaseModel):
 class LoginModel(BaseModel):
     email: EmailStr
     password: str
+
+class PostUserDescriptionModel(BaseModel):
+    user_description: str = Field(..., description="Mô tả của người dùng về triệu chứng")
