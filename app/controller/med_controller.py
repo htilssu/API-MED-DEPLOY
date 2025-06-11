@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from app.redis_client import redis_client, save_result_to_redis,get_result_by_key
 import hashlib
+from app.db.mongo import db
 
 
 
@@ -45,7 +46,7 @@ login(token=os.getenv("HUGGINGFACE_TOKEN"))
 # Cấu hình GCS và các đường dẫn
 GCS_BUCKET = "kltn-2025"
 GCS_IMAGE_PATH = "uploaded_images/"
-GCS_KEY_PATH = storage.Client.from_service_account_json("app/test.json")
+GCS_KEY_PATH = storage.Client.from_service_account_json("app/key.json")
 VECTOR_FILE = "static/processed/embedded_vectors.json"
 GCS_FOLDER = "handle_data"
 GCS_DATASET = f"dataset"
@@ -79,7 +80,7 @@ vit_model.eval()
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-
+users_collection = db["users"]
 
 # Hàm tải dữ liệu từ GCS
 def download_from_gcs():
@@ -102,7 +103,7 @@ def download_from_gcs():
 
 # Hàm upload file lên GCS
 def upload_to_gcs(local_path: str, destination_blob_name: str):
-    client = storage.Client.from_service_account_json("app/test.json")
+    client = storage.Client.from_service_account_json("app/key.json")
     bucket = client.bucket(GCS_BUCKET)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_path)
@@ -388,7 +389,7 @@ def append_disease_to_json(file_path: str, new_disease: dict):
     print(f"Added new disease: {new_disease.get('name', '')}")
 
 def upload_json_to_gcs(bucket_name: str, destination_blob_name: str, source_file_name: str):
-    client = storage.Client.from_service_account_json("app/test.json")
+    client = storage.Client.from_service_account_json("app/key.json")
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
@@ -553,6 +554,11 @@ def process_image(image_data: bytes):
 #API function
 async def start_diagnois(image: UploadFile = File(...),user_id: Optional[str] = None):
     try:
+        # Kiểm tra người dùng có tồn tại trong DB không
+        user = await users_collection.find_one({"_id": user_id})
+        if not user:
+            logger.warning(f"Người dùng với _id {user_id} không tồn tại trong DB")
+            raise HTTPException(status_code=404, detail="Người dùng không tồn tại nên không thể sử dụng dịch vụ chẩn đoán")
         download_from_gcs()
         load_faiss_index()
         #Kiểm ảnh truyền vào có phải là đuôi .jpg, .jpeg, .png
@@ -625,6 +631,7 @@ async def submit_user_description(user_description: str, key: str):
 
 async def get_differentiation_questions(key:str):
     try:
+        
         result = await get_result_by_key(key)
         if not result:
             raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chẩn đoán")
