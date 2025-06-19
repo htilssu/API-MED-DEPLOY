@@ -1,5 +1,2 @@
 .env
-gsc-key.json
-test.json
-.json
-key.json
+*.json
