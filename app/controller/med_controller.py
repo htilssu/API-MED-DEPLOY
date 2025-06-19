@@ -46,7 +46,7 @@ login(token=os.getenv("HUGGINGFACE_TOKEN"))
 # Cấu hình GCS và các đường dẫn
 GCS_BUCKET = "kltn-2025"
 GCS_IMAGE_PATH = "uploaded_images/"
-GCS_KEY_PATH = storage.Client.from_service_account_json("app/key-app.json")
+GCS_KEY_PATH = storage.Client.from_service_account_json("app/app-g-key.json")
 VECTOR_FILE = "static/processed/embedded_vectors.json"
 GCS_FOLDER = "handle_data"
 GCS_DATASET = f"dataset"
@@ -103,7 +103,7 @@ def download_from_gcs():
 
 # Hàm upload file lên GCS
 def upload_to_gcs(local_path: str, destination_blob_name: str):
-    client = storage.Client.from_service_account_json("app/key-app.json")
+    client = storage.Client.from_service_account_json("app/app-g-key.json")
     bucket = client.bucket(GCS_BUCKET)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_path)
@@ -392,7 +392,7 @@ def append_disease_to_json(file_path: str, new_disease: dict):
     print(f"Added new disease: {new_disease.get('name', '')}")
 
 def upload_json_to_gcs(bucket_name: str, destination_blob_name: str, source_file_name: str):
-    client = storage.Client.from_service_account_json("app/key-app.json")
+    client = storage.Client.from_service_account_json("app/app-g-key.json")
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
