@@ -46,7 +46,7 @@ login(token=os.getenv("HUGGINGFACE_TOKEN"))
 # Cấu hình GCS và các đường dẫn
 GCS_BUCKET = "kltn-2025"
 GCS_IMAGE_PATH = "uploaded_images/"
-GCS_KEY_PATH = storage.Client.from_service_account_json("app/key.json")
+GCS_KEY_PATH = storage.Client.from_service_account_json("app/key-app.json")
 VECTOR_FILE = "static/processed/embedded_vectors.json"
 GCS_FOLDER = "handle_data"
 GCS_DATASET = f"dataset"
@@ -103,7 +103,7 @@ def download_from_gcs():
 
 # Hàm upload file lên GCS
 def upload_to_gcs(local_path: str, destination_blob_name: str):
-    client = storage.Client.from_service_account_json("app/key.json")
+    client = storage.Client.from_service_account_json("app/key-app.json")
     bucket = client.bucket(GCS_BUCKET)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_path)
@@ -248,7 +248,7 @@ def combine_labels(normal_labels: List[str], anomaly_labels: List[str]) -> str:
 def generate_description_with_Gemini(image_data: bytes):
     try:
         img = Image.open(BytesIO(image_data))
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = """
         Mô tả bức ảnh này bằng tiếng Việt, đây là ảnh y khoa nên hãy mô tả thật kỹ.
         Chỉ tập trung vào mô tả lâm sàng, không đưa ra chẩn đoán hay kết luận.
@@ -296,7 +296,7 @@ def generate_medical_entities(image_caption, user_description):
         Chỉ liệt kê các đặc trưng có trong mô tả. Không suy luận thêm.
     """)
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content([prompt])
         text = response.text.strip()
         clean_text = re.sub(r"```(?:json)?|```", "", text).strip()
@@ -320,7 +320,7 @@ def compare_descriptions_and_labels(description: str, labels: str):
         3. ...
     """)
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content([prompt])
         text = response.text.strip()
         questions = re.findall(r"\d+\.\s+(.*)", text)
@@ -331,31 +331,34 @@ def compare_descriptions_and_labels(description: str, labels: str):
         return []
 
 # Hàm lọc nhãn không phù hợp
-def filter_incorrect_labels_by_user_description(description: str, labels: List[str]) -> Dict:
+def filter_incorrect_labels_by_user_description(description: str, labels: list[str]) -> str:
     prompt = textwrap.dedent(f"""
         Mô tả bệnh của người dùng: "{description}"
-        Danh sách các nhãn bệnh nghi ngờ: [{", ".join(labels)}]
+        Danh sách các nhãn bệnh nghi ngờ: [{labels}]
+
         Nhiệm vụ:
         1. Phân tích mô tả và so sánh với từng nhãn bệnh.
         2. Loại bỏ các nhãn bệnh không phù hợp với mô tả. Giải thích lý do loại bỏ rõ ràng.
         3. Giữ lại các nhãn phù hợp nhất, sắp xếp theo mức độ phù hợp giảm dần.
+
         Kết quả đầu ra phải ở định dạng JSON:
         {{
             "loai_bo": [{{"label": "nhãn không phù hợp", "ly_do": "..."}}],
             "giu_lai": [{{"label": "nhãn phù hợp", "do_phu_hop": "cao/trung bình/thấp"}}]
         }}
     """)
+
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content([prompt])
         text = response.text.strip()
         clean_text = re.sub(r"```(?:json)?|```", "", text).strip()
         result = json.loads(clean_text)
-        logger.info("Lọc nhãn không phù hợp thành công")
-        return result
+        return result 
+
     except Exception as e:
-        logger.error(f"Lỗi khi lọc nhãn với Gemini: {e}")
-        return {"loai_bo": [], "giu_lai": []}
+        print(f"Lỗi khi tạo mô tả với Gemini: {e}")
+        return None
 
 # Hàm tìm kiếm thông tin bệnh
 def search_disease_in_json(file_path: str, disease_name: str) -> List[Dict]:
@@ -389,7 +392,7 @@ def append_disease_to_json(file_path: str, new_disease: dict):
     print(f"Added new disease: {new_disease.get('name', '')}")
 
 def upload_json_to_gcs(bucket_name: str, destination_blob_name: str, source_file_name: str):
-    client = storage.Client.from_service_account_json("app/key.json")
+    client = storage.Client.from_service_account_json("app/key-app.json")
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
@@ -425,7 +428,7 @@ def translate_disease_name(disease_name: str) -> str:
     Trả về tên bệnh đã dịch.
     """
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)
         result = response.text.strip()
         result = re.sub(r"^(?:\w+)?\n|\n$", "", result).strip()
@@ -466,6 +469,30 @@ def clean_xml_content(xml_content: bytes) -> str:
     except ET.ParseError as e:
         logger.error(f"Lỗi phân tích XML: {e}")
         return ""
+    
+# Hàm tổng hợp câu hỏi và câu trả lời từ người dùng
+def combine_user_questions_and_answers(user_questions, user_answers):
+    if not user_questions or not user_answers:
+        logger.warning("Không có câu hỏi hoặc câu trả lời từ người dùng")
+        return []
+    prompt = f"""Hãy tổng hợp các câu hỏi và câu trả lời của người dùng theo thứ tự 
+    Danh sách câu hỏi{ user_questions}
+    Danh sách câu trả lời{ user_answers}
+    Ví dụ:Bạn có nổi mẫn đó không? Có.
+    Trả về dạng chuỗi câu hỏi và câu trả lời, mỗi câu hỏi và câu trả lời cách nhau bằng dấu phẩy.
+    """
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        if not result:
+            logger.warning("Không có kết quả trả về từ Gemini")
+            return []
+        logger.info("Tổng hợp câu hỏi và câu trả lời thành công")
+        return result.split(", ")
+    except Exception as e:
+        logger.error(f"Lỗi khi tổng hợp câu hỏi và câu trả lời: {e}")
+        return []
 
 # Hàm trích xuất thông tin y khoa từ MedlinePlus
 def extract_medical_info(text: str) -> Dict:
@@ -493,7 +520,7 @@ def extract_medical_info(text: str) -> Dict:
     - Không thêm giải thích, không in Markdown, không thêm ký tự thừa.
     """
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)
         raw_text = response.text if hasattr(response, "text") else response.parts[0].text
         raw_text = re.sub(r"^```json\n|\n```$", "", raw_text)
@@ -555,10 +582,10 @@ def process_image(image_data: bytes):
 async def start_diagnois(image: UploadFile = File(...),user_id: Optional[str] = None):
     try:
         # Kiểm tra người dùng có tồn tại trong DB không
-        user = await users_collection.find_one({"_id": user_id})
-        if not user:
-            logger.warning(f"Người dùng với _id {user_id} không tồn tại trong DB")
-            raise HTTPException(status_code=404, detail="Người dùng không tồn tại nên không thể sử dụng dịch vụ chẩn đoán")
+        # user = await users_collection.find_one({"_id": user_id})
+        # if not user:
+        #     logger.warning(f"Người dùng với _id {user_id} không tồn tại trong DB")
+        #     raise HTTPException(status_code=404, detail="Người dùng không tồn tại nên không thể sử dụng dịch vụ chẩn đoán")
         download_from_gcs()
         load_faiss_index()
         #Kiểm ảnh truyền vào có phải là đuôi .jpg, .jpeg, .png
@@ -631,7 +658,6 @@ async def submit_user_description(user_description: str, key: str):
 
 async def get_differentiation_questions(key:str):
     try:
-        
         result = await get_result_by_key(key)
         if not result:
             raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chẩn đoán")
@@ -678,24 +704,44 @@ async def submit_differation_questions(user_answers:dict,key:str):
             raise HTTPException(status_code=500, detail="Không có mô tả y khoa")
         if not user_answers or not isinstance(user_answers, dict):
             raise HTTPException(status_code=400, detail="Dữ liệu câu trả lời không hợp lệ")
-        combined_description= f"{medical_entities}\n\n{user_answers}"
+        questions = result.get("questions", [])
+        if not questions:
+            raise HTTPException(status_code=404, detail="Không tìm thấy câu hỏi phân biệt")
+        # Tổng hợp câu trả lời của người dùng và câu hỏi bằng gemini 
+        combined_answer = combine_user_questions_and_answers(questions, user_answers)
+
+        combined_description= f"{medical_entities}\n\n{combined_answer}"
         final_labels = result.get("final_labels", "")
         print("\n--- Đang loại trừ nhãn không phù hợp ---")
-        result =filter_incorrect_labels_by_user_description(combined_description, final_labels)
-        if not result:
+        result_filter =filter_incorrect_labels_by_user_description(combined_description, final_labels)
+        if not result_filter:
             print("Không có kết quả từ Gemini.")
             return
-        refined_labels = result.get("giu_lai", [])
+        refined_labels = result_filter.get("giu_lai", [])
         if not refined_labels:
             print("Không còn nhãn nào phù hợp. Đề xuất tham khảo bác sĩ.")
         else:
             print("Các nhãn còn lại sau loại trừ:")
+        # json_example_data = [{
+        # "ketqua": ""
+        # }]
+        
+        result_redis = []
         for label_info in refined_labels:
             label = label_info.get("label")
             ket_qua = "-".join(label.split("-")[1:])
             suitability = label_info.get("do_phu_hop")
             print(f"- {ket_qua} (Mức độ phù hợp: {suitability})")
-            search_final(ket_qua)
+            # json_example_data[0]["ketqua"] += f" {ket_qua}"
+            result_redis.append({"ketqua": ket_qua,"do_phu_hop": suitability})
+# Lưu kết quả vào Redis
+        current_data_json = await get_diagnosis_result(key)
+        current_data_json["result"] = result_redis
+        print(result_redis)
+        await redis_client.set(key, json.dumps(current_data_json), ex=3600) 
+        if not current_data_json:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu chẩn đoán hiện tại")
+        return JSONResponse(content=[{"result":result_redis}], status_code=200)
     except HTTPException as e:
         logger.error(f"Lỗi khi loại trừ nhãn không phù hợp: {e.detail}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi loại trừ nhãn không phù hợp: {str(e)}")
@@ -722,3 +768,16 @@ async def knowledge(disease_name: str):
         logger.error(f"Lỗi khi tra cứu thông tin bệnh: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi tra cứu thông tin bệnh: {str(e)}")
 
+
+async def get_final_result(key: str):
+    try:
+        result = await get_result_by_key(key)
+        result_diagnosis = result.get("result", [])
+        if not result:
+            raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chẩn đoán")
+        if not result_diagnosis:
+            raise HTTPException (status_code=404,detail="Kết quả không tồn tại")
+        return JSONResponse(content={ "diagnosis": result_diagnosis}, status_code=200)
+    except Exception as e:
+        logger.error(f"Lỗi khi lấy kết quả chẩn đoán: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lấy kết quả chẩn đoán")

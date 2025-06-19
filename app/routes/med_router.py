@@ -1,7 +1,7 @@
-from fastapi import APIRouter, UploadFile, File,Query,Body,Form
-from app.controller.med_controller import start_diagnois,get_diagnosis_result,get_differentiation_questions,submit_differation_questions,knowledge,submit_user_description
+from fastapi import APIRouter, UploadFile, File,Query,Body,Form, HTTPException
+from app.controller.med_controller import start_diagnois,get_diagnosis_result,get_differentiation_questions,submit_differation_questions,knowledge,submit_user_description,get_final_result
 from fastapi.responses import JSONResponse
-from app.models.userModel import PostUserDescriptionModel
+# from app.models.userModel import PostUserDescriptionModel
 router = APIRouter()
 
 @router.post("/start-diagnosis")
@@ -22,7 +22,7 @@ async def get_questions(key: str = Query(...)):
 
 @router.post("/submit-user-description")
 async def submit_user_description_route(
-    user_description: PostUserDescriptionModel = Body(..., description="Mô tả của người dùng về triệu chứng"),
+    user_description= Body(..., description="Mô tả triệu chứng của người dùng"),
     key: str = Query(..., description="Key của kết quả đã lưu")
 ):
     """
@@ -50,3 +50,11 @@ async def get_disease_knowledge(
     Tra cứu thông tin bệnh từ dataset cục bộ hoặc MedlinePlus.
     """
     return await knowledge(disease_name)
+
+@router.get("/final-diagnose")
+async def get_final_diagnose(key: str):
+    try:
+        result = await get_final_result(key)
+        return result  
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Lỗi không xác định")

@@ -2,7 +2,8 @@ import redis.asyncio as redis
 import json
 
 redis_client = redis.Redis(
-    host="10.198.34.44",  # hoặc host của Redis server
+    # host="10.198.34.44",  # hoặc host của Redis server
+    host="localhost",  # nếu Redis chạy trên localhost
     port=6379,
     db=0,
     decode_responses=True  # để tự động decode bytes thành chuỗi

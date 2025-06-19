@@ -3247,5 +3247,181 @@
         "Thời gian sử dụng": "Không tìm thấy"
       }
     ]
+  },
+  {
+    "Tên bệnh": "Athlete's Foot (Bệnh nấm da chân)",
+    "Tên khoa học": "Tinea Pedis",
+    "Triệu chứng": "Ngứa, rát, da nứt nẻ, có vảy giữa các ngón chân.",
+    "Vị trí xuất hiện": "Kẽ ngón chân, da.",
+    "Nguyên nhân": "Do nấm gây ra, lây lan từ bề mặt ẩm ướt như phòng tắm, hồ bơi, sàn phòng thay đồ.",
+    "Tiêu chí chẩn đoán": "Khám lâm sàng, xét nghiệm mẫu da (skin culture).",
+    "Chẩn đoán phân biệt": "Không tìm thấy",
+    "Điều trị": "Kem bôi chống nấm không kê đơn, thuốc kê đơn cho trường hợp nặng.",
+    "Phòng bệnh": "Giữ chân sạch sẽ, khô ráo và thoáng mát, đi tất sạch, không đi chân đất ở nơi công cộng, đi dép trong phòng tắm và phòng thay đồ, giữ móng chân sạch và cắt ngắn.",
+    "Các loại thuốc": [
+      {
+        "Tên thuốc": "Kem chống nấm (antifungal creams)",
+        "Liều lượng": "Theo hướng dẫn trên sản phẩm hoặc chỉ định của bác sĩ.",
+        "Thời gian sử dụng": "Theo chỉ định của bác sĩ hoặc đến khi hết triệu chứng."
+      },
+      {
+        "Tên thuốc": "Thuốc uống chống nấm (oral antifungal medicines)",
+        "Liều lượng": "Theo chỉ định của bác sĩ.",
+        "Thời gian sử dụng": "Theo chỉ định của bác sĩ."
+      }
+    ]
+  },
+  {
+    "Tên bệnh": "Ringworm (Bệnh nấm da)",
+    "Tên khoa học": "Tinea",
+    "Triệu chứng": "Phát ban da đỏ hình tròn xung quanh vùng da bình thường, ngứa, mảng đỏ trên đầu (nấm da đầu), có thể gây rụng tóc",
+    "Vị trí xuất hiện": "Da, da đầu",
+    "Nguyên nhân": "Do nấm",
+    "Tiêu chí chẩn đoán": "Khám thực thể, hỏi về triệu chứng, có thể làm xét nghiệm da (ví dụ: cạo da)",
+    "Chẩn đoán phân biệt": "Không tìm thấy",
+    "Điều trị": "Kem bôi hoặc thuốc uống chống nấm (cần kê đơn trong một số trường hợp)",
+    "Phòng bệnh": "Không tìm thấy",
+    "Các loại thuốc": [
+      {
+        "Tên thuốc": "Kem chống nấm (không kê đơn)",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      },
+      {
+        "Tên thuốc": "Thuốc chống nấm (kê đơn)",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      }
+    ]
+  },
+  {
+    "Tên bệnh": "Nấm da chân",
+    "Tên khoa học": "Tinea Pedis",
+    "Triệu chứng": "Ngứa, rát, da nứt nẻ, có vảy giữa các ngón chân.",
+    "Vị trí xuất hiện": "Kẽ ngón chân, da",
+    "Nguyên nhân": "Do nấm gây ra, lây từ bề mặt ẩm ướt như phòng tắm, hồ bơi, sàn phòng thay đồ.",
+    "Tiêu chí chẩn đoán": "Khám thực thể, hỏi về triệu chứng, xét nghiệm mẫu da (skin culture).",
+    "Chẩn đoán phân biệt": "Không tìm thấy",
+    "Điều trị": "Kem bôi chống nấm không kê đơn (over-the-counter antifungal creams), thuốc kê đơn cho trường hợp nặng.",
+    "Phòng bệnh": "Giữ chân sạch sẽ, khô ráo và thoáng mát, đi tất sạch, không đi chân trần ở nơi công cộng, đi dép trong phòng tắm và phòng thay đồ, giữ móng chân sạch và cắt ngắn.",
+    "Các loại thuốc": [
+      {
+        "Tên thuốc": "Kem chống nấm (antifungal creams)",
+        "Liều lượng": "Theo hướng dẫn trên bao bì hoặc chỉ định của bác sĩ.",
+        "Thời gian sử dụng": "Theo chỉ định của bác sĩ hoặc đến khi hết triệu chứng."
+      },
+      {
+        "Tên thuốc": "Thuốc chống nấm kê đơn",
+        "Liều lượng": "Theo chỉ định của bác sĩ",
+        "Thời gian sử dụng": "Theo chỉ định của bác sĩ"
+      }
+    ]
+  },
+  {
+    "Tên bệnh": "Ringworm (Bệnh hắc lào)",
+    "Tên khoa học": "Tinea",
+    "Triệu chứng": "Phát ban da đỏ hình vòng xung quanh vùng da trông bình thường; các mảng da đỏ, ngứa trên đầu, có thể gây rụng tóc; ngứa, rát và nứt da giữa các ngón chân (nếu là nấm da chân); phát ban ngứa, rát ở vùng háng (nếu là ngứa vùng bẹn).",
+    "Vị trí xuất hiện": "Da, da đầu, bàn chân (giữa các ngón chân), vùng háng",
+    "Nguyên nhân": "Do nấm (fungus)",
+    "Tiêu chí chẩn đoán": "Khám thực thể, hỏi về triệu chứng, có thể làm xét nghiệm da (skin culture).",
+    "Chẩn đoán phân biệt": "Không tìm thấy",
+    "Điều trị": "Kem và bột không kê đơn (over-the-counter) cho các trường hợp nhẹ; thuốc kê đơn cho các trường hợp nặng hơn.",
+    "Phòng bệnh": "Không tìm thấy",
+    "Các loại thuốc": [
+      {
+        "Tên thuốc": "Kem và bột chống nấm (antifungal)",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      },
+      {
+        "Tên thuốc": "Thuốc chống nấm kê đơn",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      }
+    ]
+  },
+  {
+    "Tên bệnh": "Athlete's Foot (Bệnh nấm da chân)",
+    "Tên khoa học": "Tinea Pedis",
+    "Triệu chứng": "Ngứa, rát, da nứt nẻ, có vảy giữa các ngón chân.",
+    "Vị trí xuất hiện": "Kẽ ngón chân, da",
+    "Nguyên nhân": "Do nấm gây ra. Lây lan từ các bề mặt ẩm ướt như vòi hoa sen, hồ bơi, sàn phòng thay đồ, hoặc tiếp xúc với người bệnh, vật nuôi bị nhiễm bệnh.",
+    "Tiêu chí chẩn đoán": "Khám thực thể, hỏi về triệu chứng, có thể làm xét nghiệm da.",
+    "Chẩn đoán phân biệt": "Không tìm thấy",
+    "Điều trị": "Kem chống nấm không kê đơn (OTC) cho hầu hết các trường hợp. Thuốc kê đơn cho các trường hợp nhiễm trùng nghiêm trọng hơn.",
+    "Phòng bệnh": "Giữ chân sạch sẽ, khô ráo và mát mẻ. Đi tất sạch. Không đi chân trần ở nơi công cộng. Đi dép trong phòng tắm ở phòng thay đồ. Giữ móng chân sạch sẽ và cắt ngắn.",
+    "Các loại thuốc": [
+      {
+        "Tên thuốc": "Kem chống nấm (OTC)",
+        "Liều lượng": "Theo hướng dẫn trên bao bì",
+        "Thời gian sử dụng": "Theo hướng dẫn trên bao bì"
+      },
+      {
+        "Tên thuốc": "Thuốc chống nấm (kê đơn)",
+        "Liều lượng": "Theo chỉ định của bác sĩ",
+        "Thời gian sử dụng": "Theo chỉ định của bác sĩ"
+      }
+    ]
+  },
+  {
+    "Tên bệnh": "Shingles (Zona)",
+    "Tên khoa học": "Herpes Zoster",
+    "Triệu chứng": "Đau rát, đau nhói, ngứa, phát ban (thường một dải trên một bên cơ thể hoặc mặt), mụn nước đóng vảy sau 7-10 ngày, sốt, nhức đầu, ớn lạnh, khó chịu ở bụng.",
+    "Vị trí xuất hiện": "Một bên cơ thể hoặc mặt, có thể lan rộng ở người suy giảm miễn dịch.",
+    "Nguyên nhân": "Virus varicella-zoster (VZV), virus gây bệnh thủy đậu tái hoạt động.",
+    "Tiêu chí chẩn đoán": "Tiền sử bệnh, khám phát ban, xét nghiệm mẫu từ phát ban (trong một số trường hợp).",
+    "Chẩn đoán phân biệt": "Không tìm thấy",
+    "Điều trị": "Thuốc kháng virus (trong vòng 3 ngày sau phát ban), thuốc giảm đau, chườm mát, lotion calamine, tắm bột yến mạch.",
+    "Phòng bệnh": "Vaccine Shingrix, tránh tiếp xúc với người suy giảm miễn dịch, người chưa mắc thủy đậu hoặc chưa tiêm vaccine thủy đậu (đặc biệt phụ nữ mang thai), trẻ sinh non hoặc nhẹ cân, giữ vết phát ban được che phủ, không chạm hoặc gãi phát ban, rửa tay thường xuyên.",
+    "Các loại thuốc": [
+      {
+        "Tên thuốc": "Thuốc kháng virus",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Trong vòng 3 ngày sau phát ban"
+      },
+      {
+        "Tên thuốc": "Thuốc giảm đau",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      },
+      {
+        "Tên thuốc": "Hydrocortisone cream, Antihistamines",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      }
+    ]
+  },
+  {
+    "Tên bệnh": "Shingles (zona)",
+    "Tên khoa học": "Herpes Zoster",
+    "Triệu chứng": "Đau rát, nhói hoặc ngứa; phát ban (thường ở một bên cơ thể hoặc mặt); mụn nước; sốt; nhức đầu; ớn lạnh; khó chịu ở bụng",
+    "Vị trí xuất hiện": "Một bên cơ thể hoặc mặt, thường là một dải duy nhất; có thể lan rộng ở người suy giảm miễn dịch",
+    "Nguyên nhân": "Virus varicella-zoster (VZV), cùng loại virus gây bệnh thủy đậu. Virus này tái hoạt động sau khi đã tồn tại tiềm ẩn trong cơ thể từ lần mắc thủy đậu trước đó",
+    "Tiêu chí chẩn đoán": "Tiền sử bệnh; khám phát ban; xét nghiệm mẫu mô hoặc dịch từ mụn nước (trong một số trường hợp)",
+    "Chẩn đoán phân biệt": "Không tìm thấy",
+    "Điều trị": "Thuốc kháng virus (trong vòng 3 ngày sau khi phát ban); thuốc giảm đau; chườm mát; kem calamine; tắm bột yến mạch",
+    "Phòng bệnh": "Vaccine Shingrix (cho người lớn khỏe mạnh từ 50 tuổi trở lên, hoặc từ 19 tuổi trở lên nếu suy giảm miễn dịch); tránh tiếp xúc với người có hệ miễn dịch yếu, người chưa bị thủy đậu hoặc chưa tiêm phòng thủy đậu (đặc biệt là phụ nữ mang thai), trẻ sinh non hoặc nhẹ cân; giữ vết phát ban được che chắn; không chạm hoặc gãi vết phát ban; rửa tay thường xuyên",
+    "Các loại thuốc": [
+      {
+        "Tên thuốc": "Thuốc kháng virus",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Trong vòng 3 ngày sau khi phát ban"
+      },
+      {
+        "Tên thuốc": "Thuốc giảm đau",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      },
+      {
+        "Tên thuốc": "Kem hydrocortisone",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      },
+      {
+        "Tên thuốc": "Thuốc kháng histamine",
+        "Liều lượng": "Không tìm thấy",
+        "Thời gian sử dụng": "Không tìm thấy"
+      }
+    ]
   }
 ]

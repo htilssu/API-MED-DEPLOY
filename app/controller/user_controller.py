@@ -32,7 +32,7 @@ async def get_user_diagnoses(user_id: str):
     Lấy tất cả các bản ghi chuẩn đoán của người dùng theo userId.
     """
     diagnoses = []
-    async for diagnosis in diagnoses_collection.find({"userId": user_id}):
+    async for diagnosis in diagnoses_collection.find({" ": user_id}):
         diagnosis["_id"] = str(diagnosis["_id"])  # Chuyển _id thành str
         diagnoses.append(DiagnoseModel(**diagnosis))
     return diagnoses
