@@ -39,8 +39,8 @@ async def submit_differentiation_route(
     """
     Gửi câu trả lời phân biệt từ người dùng để loại trừ nhãn không phù hợp.
     """
-    await submit_differation_questions(user_answers=user_answers, key=key)
-    return {"message": "Đã xử lý câu trả lời phân biệt thành công"}
+    return await submit_differation_questions(user_answers=user_answers, key=key)
+    
 
 @router.get("/knowledge")
 async def get_disease_knowledge(

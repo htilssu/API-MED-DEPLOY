@@ -40,7 +40,7 @@ login(token=os.getenv("HUGGINGFACE_TOKEN"))
 
 GCS_BUCKET = "kltn-2025"
 GCS_IMAGE_PATH = "uploaded_images/"
-GCS_KEY_PATH = storage.Client.from_service_account_json("app/app-g-key.json")
+GCS_KEY_PATH = storage.Client.from_service_account_json("app/iamkey.json")
 VECTOR_FILE = "static/processed/embedded_vectors.json"
 GCS_FOLDER = "handle_data"
 GCS_DATASET = f"dataset"
@@ -93,7 +93,7 @@ def download_from_gcs():
         logger.info(f"Tải về {gcs_path} to {local_path}")
 
 def upload_to_gcs(local_path: str, destination_blob_name: str):
-    client = storage.Client.from_service_account_json("app/app-g-key.json")
+    client = storage.Client.from_service_account_json("app/iamkey.json")
     bucket = client.bucket(GCS_BUCKET)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_path)
@@ -197,6 +197,8 @@ def search_similar_images(query_vector, top_k=5):
 
         similar_results = []
         for idx, sim in zip(indices[0], distances[0]):
+            if sim < 80:  # Loại bỏ nhãn có similarity dưới 0.8
+                continue
             if 0 <= idx < len(labels):
                 label_filename = list(labels.keys())[idx]
                 label = labels[label_filename]
@@ -227,6 +229,8 @@ def search_anomaly_images(query_vector, top_k=5):
 
         similar_results = []
         for idx, sim in zip(indices[0], distances[0]):
+            if sim < 80:  # Loại bỏ nhãn có similarity dưới 0.8
+                continue    
             if 0 <= idx < len(anomaly_labels):
                 label_filename = list(anomaly_labels.keys())[idx]
                 label = anomaly_labels[label_filename]
@@ -242,9 +246,44 @@ def search_anomaly_images(query_vector, top_k=5):
         logger.error(f"Lỗi tìm kiếm ảnh anomaly: {e}")
         return []
 
-def combine_labels(normal_labels: List[str], anomaly_labels: List[str]) -> str:
-    all_labels = normal_labels + anomaly_labels
-    return " ".join(all_labels).strip()
+def combine_labels(detailed_labels_normal: List[Dict], detailed_labels_anomaly: List[Dict]) -> str:
+    """
+    Kết hợp nhãn từ detailed_labels_normal và detailed_labels_anomaly, loại bỏ trùng lặp và nhãn có similarity < 0.8.
+    Args:
+        detailed_labels_normal: Danh sách dict chứa label và cosine_similarity từ ảnh gốc.
+        detailed_labels_anomaly: Danh sách dict chứa label và cosine_similarity từ anomaly map.
+    Returns:
+        Chuỗi các nhãn được kết hợp, sắp xếp theo cosine_similarity giảm dần.
+    """
+    # Kết hợp tất cả nhãn từ cả hai nguồn
+    all_labels = detailed_labels_normal + detailed_labels_anomaly
+    
+    # Chuẩn hóa và lọc nhãn
+    filtered_labels = []
+    seen_labels = {}  # Lưu nhãn và similarity cao nhất
+    for item in all_labels:
+        label = item["label"]
+        sim = item["cosine_similarity"]
+        # Chuẩn hóa similarity nếu ở thang 0-100
+        normalized_sim = sim / 100.0 if sim > 1.0 else sim
+        if normalized_sim < 0.8:  # Loại bỏ nhãn có similarity < 0.8
+            continue
+        # Giữ nhãn có similarity cao nhất nếu trùng lặp
+        if label not in seen_labels or normalized_sim > seen_labels[label]:
+            seen_labels[label] = normalized_sim
+    
+    # Tạo danh sách nhãn đã lọc và sắp xếp theo similarity giảm dần
+    filtered_labels = [
+        {"label": label, "cosine_similarity": sim}
+        for label, sim in seen_labels.items()
+    ]
+    filtered_labels.sort(key=lambda x: x["cosine_similarity"], reverse=True)
+    
+    # Tạo chuỗi nhãn
+    final_labels = " ".join(item["label"] for item in filtered_labels).strip()
+    
+    logger.info(f"Nhãn tổng hợp sau lọc và sắp xếp: {final_labels}")
+    return final_labels
 
 def generate_description_with_Gemini(image_data: bytes):
     try:
@@ -338,11 +377,11 @@ def filter_incorrect_labels_by_user_description(description: str, labels: list[s
         1. Phân tích mô tả và so sánh với từng nhãn bệnh.
         2. Loại bỏ các nhãn bệnh không phù hợp với mô tả. Giải thích lý do loại bỏ rõ ràng.
         3. Giữ lại các nhãn phù hợp nhất, sắp xếp theo mức độ phù hợp giảm dần.
-
+        4. Trả thêm similarity của từng nhãn bệnh 
         Kết quả đầu ra phải ở định dạng JSON:
         {{
-            "loai_bo": [{{"label": "nhãn không phù hợp", "ly_do": "..."}}],
-            "giu_lai": [{{"label": "nhãn phù hợp", "do_phu_hop": "cao/trung bình/thấp"}}]
+            "loai_bo": [{{"label": "nhãn không phù hợp", "ly_do": "...","similarity":""}}],
+            "giu_lai": [{{"label": "nhãn phù hợp", "do_phu_hop": "cao/trung bình/thấp", "similarity":""}}]
         }}
     """)
 
@@ -388,7 +427,7 @@ def append_disease_to_json(file_path: str, new_disease: dict):
     print(f"Added new disease: {new_disease.get('name', '')}")
 
 def upload_json_to_gcs(bucket_name: str, destination_blob_name: str, source_file_name: str):
-    client = storage.Client.from_service_account_json("app/app-g-key.json")
+    client = storage.Client.from_service_account_json("app/iamkey            .json")
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
@@ -575,7 +614,7 @@ def process_image(image_data: bytes):
             logger.info("Anomaly Map:")
             for item in detailed_labels_anomaly:
                 logger.info(f"- {item['label']} (cosine: {item['cosine_similarity']:.4f})")
-    final_labels = combine_labels(result_labels_simple, anomaly_result_labels_simple)
+    final_labels = combine_labels(detailed_labels_anomaly, detailed_labels_normal)
     logger.info(f"Nhãn tổng hợp cuối cùng: {final_labels}")
 
     return final_labels, result_labels_simple, anomaly_result_labels_simple, detailed_labels_normal, detailed_labels_anomaly
@@ -654,9 +693,6 @@ async def get_differentiation_questions(key:str):
         user_description = result.get("user_description", "")
         if not user_description or not key:
             raise HTTPException(status_code=400, detail="Thiếu mô tả ảnh hoặc key")
-        result = await get_result_by_key(key)
-        if not result:
-            raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chẩn đoán")
         result_medical_entities = generate_medical_entities(
             user_description or "Không có mô tả từ người dùng",
             result.get("image_description", "") or "Không có mô tả từ ảnh"
@@ -714,8 +750,9 @@ async def submit_differation_questions(user_answers:dict,key:str):
             label = label_info.get("label")
             ket_qua = "-".join(label.split("-")[1:])
             suitability = label_info.get("do_phu_hop")
-            print(f"- {ket_qua} (Mức độ phù hợp: {suitability})")
-            result_redis.append({"ketqua": ket_qua,"do_phu_hop": suitability})
+            similarity= label_info.get("similarity", "")
+            print(f"- {ket_qua} (Mức độ phù hợp: {suitability}) (Similarity: {similarity})")
+            result_redis.append({"ketqua": ket_qua,"do_phu_hop": suitability, "similarity": similarity})
         current_data_json = await get_diagnosis_result(key)
         current_data_json["result"] = result_redis
         print(result_redis)
