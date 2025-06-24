@@ -27,4 +27,6 @@ pydantic[email]
 google-cloud-secret-manager
 python-multipart
 bcrypt
-huggingface_hub
+huggingface_hub 
+cloudinary
+cloudinary.uploader 
