@@ -46,15 +46,54 @@ class DiagnoseModel(BaseModel):
             }
         }
 
+class CheckProcessModel(BaseModel):
+    id: Optional[str] = Field(alias="_id")
+    userId: str
+    imageUrl: str  # URL của ảnh da
+    date: datetime = Field(default_factory=datetime.now)  # Ngày giờ bắt đầu quá trình kiểm tra
 
+    class Config:
+        json_encoders = {
+            ObjectId: str  # Chuyển ObjectId thành str khi trả về JSON
+        }
+        json_schema_extra = {
+            "example": {
+                "userId": "user_id_here",
+                "imageUrl": "http://example.com/image.jpg",
+                "date": "2023-10-01T12:00:00"
+            }
+        }
+
+class Paper_Model(BaseModel):
+    id: Optional[str] = Field(alias="_id")
+    title: str
+    content: str
+    date: datetime = Field(default_factory=datetime.now)  # Ngày giờ đăng bài
+    class Config:
+        json_encoders = {
+            ObjectId: str  # Chuyển ObjectId thành str khi trả về JSON
+        }
+        json_schema_extra = {
+            "example": {
+                "title": "Bài viết về bệnh da liễu",
+                "content": "Nội dung bài viết...",
+                "date": "2023-10-01T12:00:00"
+            }
+        }
+
+#Model cho tạo bài báo 
+class CreateNewsModel(BaseModel):
+    title: str = Field(..., description="Tiêu đề bài báo")
+    content: str = Field(..., description="Nội dung bài báo")
+    date:datetime = Field(default_factory=datetime.now)  # Ngày giờ đăng bài
 
 # Model cho tạo người dùng (không cần _id)
 class CreateUserModel(BaseModel):
-    name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    password: Optional[str] = None
-    dateOfBirth: date = None
+    name: str = Field(..., description="Tên người dùng")
+    email: EmailStr = Field(..., description="Email người dùng")
+    phone: Optional[str] = Field(None, description="Số điện thoại người dùng")
+    password: Optional[str] = Field(None, description="Mật khẩu người dùng")
+    dateOfBirth: date = Field(..., description="Ngày sinh của người dùng")
 
 # Model lưu trữ thông tin chuẩn đoán (không cần _id)
 class CreateDiagnoseModel(BaseModel):
@@ -65,8 +104,8 @@ class CreateDiagnoseModel(BaseModel):
 
 # Model cho đăng nhập
 class LoginModel(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(..., description="Email người dùng để đăng nhập")
+    password: str = Field(..., description="Mật khẩu người dùng để đăng nhập")
 
 class PostUserDescriptionModel(BaseModel):
     user_description: str = Field(..., description="Mô tả của người dùng về triệu chứng")

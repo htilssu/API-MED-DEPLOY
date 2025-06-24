@@ -315,7 +315,7 @@ def generate_description_with_Gemini(image_data: bytes):
 def generate_medical_entities(image_caption, user_description):
     combined_description = f"1. Mô tả từ người dùng: {user_description}. 2. Mô tả từ ảnh: {image_caption}."
     print(combined_description)
-
+    logger.info(f"Combined description: {combined_description}")
     prompt = textwrap.dedent(f"""
         Tôi có 2 đoạn mô tả sau về một vùng da bị bất thường: {combined_description}
         Hãy chuẩn hóa cả hai mô tả, loại bỏ từ dư thừa, hợp nhất lại, và trích xuất các đặc trưng y khoa quan trọng.
@@ -333,6 +333,8 @@ def generate_medical_entities(image_caption, user_description):
           {{ "entity": "dị ứng thời tiết", "type": "Nguyên nhân" }}
         ]
         Chỉ liệt kê các đặc trưng có trong mô tả. Không suy luận thêm.
+        - Trả về JSON thuần túy, không bao gồm Markdown (```json hoặc ```), không thêm ký tự thừa.
+        - Đảm bảo JSON hợp lệ và có thể phân tích trực tiếp.    
     """)
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
