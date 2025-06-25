@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 # from app.models.userModel import PostUserDescriptionModel
 router = APIRouter()
 
+from app.models.userModel import PostUserDescriptionModel,SubmitDifferentiationModel
+
 @router.post("/start-diagnosis")
 async def start_diagnosis_route(
     image: UploadFile = File(...),
@@ -22,7 +24,7 @@ async def get_questions(key: str = Query(...)):
 
 @router.post("/submit-user-description")
 async def submit_user_description_route(
-    user_description= Body(..., description="Mô tả triệu chứng của người dùng"),
+    user_description:str= Body(..., description="Mô tả triệu chứng của người dùng"),
     key: str = Query(..., description="Key của kết quả đã lưu")
 ):
     """
@@ -34,7 +36,7 @@ async def submit_user_description_route(
 @router.post("/submit-differentiation-questions")
 async def submit_differentiation_route(
     key: str = Query(..., description="Key của kết quả đã lưu"),
-    user_answers: dict = Body(..., description="Câu trả lời của người dùng cho câu hỏi phân biệt")
+    user_answers:SubmitDifferentiationModel  = Body(..., description="Câu trả lời của người dùng cho câu hỏi phân biệt")
 ):
     """
     Gửi câu trả lời phân biệt từ người dùng để loại trừ nhãn không phù hợp.

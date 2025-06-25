@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.routes import auth_router
 from app.routes import med_router
 from app.routes import user_router
+from app.routes import uv_router
 import os
 from dotenv import load_dotenv
 import uvicorn
@@ -33,6 +34,7 @@ async def health_check():
 app.include_router(med_router.router, prefix="/api")
 app.include_router(auth_router.router, prefix="/api")
 app.include_router(user_router.router, prefix="/api")
+app.include_router(uv_router.router, prefix="/api")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
