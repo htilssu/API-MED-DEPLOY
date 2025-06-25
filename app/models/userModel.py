@@ -67,6 +67,7 @@ class CheckProcessModel(BaseModel):
 class Paper_Model(BaseModel):
     id: Optional[str] = Field(alias="_id")
     title: str
+    mainImage: Optional[str] = None  # URL của ảnh chính (nếu có)
     content: str
     date: datetime = Field(default_factory=datetime.now)  # Ngày giờ đăng bài
     class Config:
@@ -81,11 +82,38 @@ class Paper_Model(BaseModel):
             }
         }
 
+class LegitHospitalModel(BaseModel):
+    id: Optional[str] = Field(alias="_id")
+    name: str
+    address: str
+    phone: Optional[str] = None
+    img: Optional[str] = None  # URL của ảnh bệnh viện (nếu có)
+    yearEstablished: Optional[int] = None  # Năm thành lập bệnh viện (n
+    specialties: List[str] = Field(..., description="Danh sách chuyên khoa của bệnh viện")
+    region: Optional[str] = None  # Khu vực của bệnh viện (nếu
+    class Config:
+        json_encoders = {
+            ObjectId: str  # Chuyển ObjectId thành str khi trả về JSON
+        }
+        json_schema_extra = {
+            "example": {
+                "name": "Bệnh viện Da liễu",
+                "address": "123 Đường ABC, Quận 1, TP.HCM",
+                "phone": "0123456789",
+                "img": "http://example.com/hospital.jpg",
+                "yearEstablished": 1990,
+                "specialties": ["Da liễu", "Thẩm mỹ"],
+                "region": "Miền Nam"
+            }
+        }
+        
 #Model cho tạo bài báo 
 class CreateNewsModel(BaseModel):
     title: str = Field(..., description="Tiêu đề bài báo")
     content: str = Field(..., description="Nội dung bài báo")
     date:datetime = Field(default_factory=datetime.now)  # Ngày giờ đăng bài
+
+
 
 # Model cho tạo người dùng (không cần _id)
 class CreateUserModel(BaseModel):
@@ -109,3 +137,6 @@ class LoginModel(BaseModel):
 
 class PostUserDescriptionModel(BaseModel):
     user_description: str = Field(..., description="Mô tả của người dùng về triệu chứng")
+
+class SubmitDifferentiationModel(BaseModel):
+    description: str = Field(..., description="Mô tả triệu chứng của người dùng")
