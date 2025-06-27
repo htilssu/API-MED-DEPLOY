@@ -682,7 +682,7 @@ async def submit_user_description(user_description: str, key: str):
         current_data["user_description"] = user_description
 
         await redis_client.set(key, json.dumps(current_data), ex=3600)  
-        return JSONResponse(content={"message": "Mô tả người dùng đã được lưu thành công"}, status_code=200)
+        return JSONResponse(content={"message": "Mô tả người dùng đã được lưu thành công","user description":user_description}, status_code=200)
     except HTTPException as e:
         logger.error(f"Lỗi khi lưu mô tả người dùng: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi lưu mô tả người dùng: {str(e)}")     

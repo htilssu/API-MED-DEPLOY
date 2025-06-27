@@ -70,11 +70,9 @@ async def create_paper_route(
         raise HTTPException(status_code=400, detail="Không thể tạo bài báo")
     return paper.__dict__
 
-
 @router.get("/papers", response_model=List[Paper_Model])
 async def get_all_papers_route():
     return await get_all_papers()
-
 
 @router.get("/paper/{paper_id}", response_model=dict)
 async def get_paper_by_id_route(paper_id: str):
@@ -82,7 +80,6 @@ async def get_paper_by_id_route(paper_id: str):
     if not paper:
         raise HTTPException(status_code=404, detail="Bài báo không tồn tại")
     return paper.__dict__
-
 
 @router.post("/update-paper/{paper_id}", response_model=dict)
 async def update_paper_route(
@@ -96,7 +93,6 @@ async def update_paper_route(
         raise HTTPException(status_code=404, detail="Bài báo không tồn tại hoặc không có thay đổi")
     return paper.__dict__
 
-
 @router.delete("/delete-paper/{paper_id}", response_model=dict)
 async def delete_paper_route(paper_id: str):
     deleted = await delete_paper(paper_id)
@@ -104,9 +100,8 @@ async def delete_paper_route(paper_id: str):
         raise HTTPException(status_code=404, detail="Bài báo không tồn tại")
     return {"message": "Bài báo đã được xóa thành công"}
 
-
 # === LEGIT HOSPITAL ===
-@router.post("/create-legit-hospital", response_model=dict, status_code=201)
+@router.post("/create-legit-hospital", status_code=201)
 async def create_legit_hospital_route(
     name: str = Form(...),
     address: str = Form(...),
@@ -119,13 +114,11 @@ async def create_legit_hospital_route(
     hospital = await create_legit_hospital(name, address, phone, img, yearEstablished, specialties, region)
     if not hospital:
         raise HTTPException(status_code=400, detail="Không thể tạo bệnh viện")
-    return hospital.__dict__
-
+    return hospital.model_dump(by_alias=True)
 
 @router.get("/legit-hospitals", response_model=List[LegitHospitalModel])
 async def get_all_legit_hospitals_route():
     return await get_all_legit_hospitals()
-
 
 @router.get("/legit-hospital/{hospital_id}", response_model=dict)
 async def get_legit_hospital_by_id_route(hospital_id: str):
@@ -134,11 +127,9 @@ async def get_legit_hospital_by_id_route(hospital_id: str):
         raise HTTPException(status_code=404, detail="Bệnh viện không tồn tại")
     return hospital.__dict__
 
-
 @router.get("/hospitals-by-specialty", response_model=List[LegitHospitalModel])
 async def get_hospitals_by_specialty_route(specialty: str):
     return await get_hospitals_by_specialty(specialty)
-
 
 @router.post("/add-specialty-to-hospital", response_model=dict)
 async def add_specialty_to_hospital_route(
@@ -150,7 +141,6 @@ async def add_specialty_to_hospital_route(
         raise HTTPException(status_code=404, detail="Bệnh viện không tồn tại hoặc chuyên khoa đã có")
     return {"message": "Chuyên khoa đã được thêm thành công"}
 
-
 @router.post("/remove-specialty-from-hospital", response_model=dict)
 async def remove_specialty_from_hospital_route(
     hospital_id: str = Form(...),
@@ -161,14 +151,12 @@ async def remove_specialty_from_hospital_route(
         raise HTTPException(status_code=404, detail="Bệnh viện không tồn tại hoặc chuyên khoa không có")
     return {"message": "Chuyên khoa đã được xóa thành công"}
 
-
 @router.delete("/delete-legit-hospital/{hospital_id}", response_model=dict)
 async def delete_legit_hospital_route(hospital_id: str):
     deleted = await delete_legit_hospital(hospital_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Bệnh viện không tồn tại")
     return {"message": "Bệnh viện đã được xóa thành công"}
-
 
 # === CHECK PROCESS ===
 @router.get("/check-process/{process_id}", response_model=dict)
@@ -178,11 +166,9 @@ async def get_check_process_by_id_route(process_id: str):
         raise HTTPException(status_code=404, detail="Quá trình kiểm tra da không tồn tại")
     return process.__dict__
 
-
 @router.get("/user-check-process/{user_id}", response_model=List[CheckProcessModel])
 async def get_check_process_by_user_route(user_id: str):
     return await get_check_process_by_user(user_id)
-
 
 @router.post("/create-check-process", response_model=dict, status_code=201)
 async def create_check_process_route(
@@ -194,10 +180,9 @@ async def create_check_process_route(
         raise HTTPException(status_code=400, detail="Không thể tạo quá trình kiểm tra da")
     return process.__dict__
 
-
 @router.post("/track-check-process/{process_id}", response_model=dict)
 async def track_check_process_route(
-    process_id: str,  # ✅ FIXED: không dùng Form cho path param
+    process_id: str,
     image: UploadFile = File(...),
     user_id: str = Form(...)
 ):
@@ -206,7 +191,6 @@ async def track_check_process_route(
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
 
 @router.delete("/delete-check-process/{process_id}", response_model=dict)
 async def delete_check_process_route(process_id: str):
