@@ -30,8 +30,8 @@ async def submit_user_description_route(
     """
     Gửi mô tả triệu chứng từ người dùng để cải thiện độ chính xác của chuẩn đoán.
     """
-    await submit_user_description(user_description=user_description, key=key)
-    return {"message": "Đã xử lý mô tả triệu chứng thành công"}
+    return await submit_user_description(user_description=user_description, key=key)
+     
 
 @router.post("/submit-differentiation-questions")
 async def submit_differentiation_route(

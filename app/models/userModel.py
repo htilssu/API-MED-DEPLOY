@@ -47,25 +47,25 @@ class DiagnoseModel(BaseModel):
         }
 
 class CheckProcessModel(BaseModel):
-    id: Optional[str] = Field(alias="_id")
+    id: Optional[str] = Field(default=None, alias="_id")  # ✅ sửa chỗ này
     userId: str
-    imageUrl: str  # URL của ảnh da
-    date: datetime = Field(default_factory=datetime.now)  # Ngày giờ bắt đầu quá trình kiểm tra
+    imageUrl: List[str]
 
     class Config:
-        json_encoders = {
-            ObjectId: str  # Chuyển ObjectId thành str khi trả về JSON
-        }
+        populate_by_name = True
+        json_encoders = {ObjectId: str}
         json_schema_extra = {
             "example": {
-                "userId": "user_id_here",
-                "imageUrl": "http://example.com/image.jpg",
-                "date": "2023-10-01T12:00:00"
+                "userId": "123",
+                "imageUrl": [
+                    "https://res.cloudinary.com/.../abc.jpg",
+                    "https://res.cloudinary.com/.../xyz.jpg"
+                ]
             }
         }
 
 class Paper_Model(BaseModel):
-    id: Optional[str] = Field(alias="_id")
+    id: Optional[str] = Field(default=None,alias="_id")
     title: str
     mainImage: Optional[str] = None  # URL của ảnh chính (nếu có)
     content: str
@@ -83,17 +83,18 @@ class Paper_Model(BaseModel):
         }
 
 class LegitHospitalModel(BaseModel):
-    id: Optional[str] = Field(alias="_id")
+    id: Optional[str] = Field(default=None, alias="_id")
     name: str
     address: str
     phone: Optional[str] = None
-    img: Optional[str] = None  # URL của ảnh bệnh viện (nếu có)
-    yearEstablished: Optional[int] = None  # Năm thành lập bệnh viện (n
-    specialties: List[str] = Field(..., description="Danh sách chuyên khoa của bệnh viện")
-    region: Optional[str] = None  # Khu vực của bệnh viện (nếu
+    img: Optional[str] = None
+    yearEstablished: Optional[int] = None
+    specialties: List[str]
+    region: Optional[str] = None
+
     class Config:
         json_encoders = {
-            ObjectId: str  # Chuyển ObjectId thành str khi trả về JSON
+            ObjectId: str
         }
         json_schema_extra = {
             "example": {
@@ -112,6 +113,8 @@ class CreateNewsModel(BaseModel):
     title: str = Field(..., description="Tiêu đề bài báo")
     content: str = Field(..., description="Nội dung bài báo")
     date:datetime = Field(default_factory=datetime.now)  # Ngày giờ đăng bài
+
+
 
 
 
