@@ -21,7 +21,8 @@ from app.controller.user_controller import (
     get_hospitals_by_specialty, add_specialty_to_hospital, remove_specialty_from_hospital,
     delete_legit_hospital, get_check_process_by_id, get_check_process_by_user,
     create_check_process, track_check_process, delete_check_process,
-    create_paper, get_all_papers, get_paper_by_id, update_paper, delete_paper
+    create_paper, get_all_papers, get_paper_by_id, update_paper, delete_paper,update_legit_hospital,
+    get_papers_by_tag
 )
 
 router = APIRouter()
@@ -63,9 +64,13 @@ async def delete_diagnosis_route(diagnosis_id: str):
 async def create_paper_route(
     title: str = Form(...),
     content: str = Form(...),
-    image: Optional[UploadFile] = File(None)
+    image: Optional[UploadFile] = File(None),
+    author: Optional[str] = Form(None),
+    authorImage: Optional[UploadFile] = File(None),
+    authorDescription: Optional[str] = Form(None),
+    tags: Optional[List[str]] = Form(None)
 ):
-    paper = await create_paper(title, content, image)
+    paper = await create_paper(title, content, image,author, authorImage, authorDescription, tags)
     if not paper:
         raise HTTPException(status_code=400, detail="Không thể tạo bài báo")
     return paper.__dict__
@@ -73,6 +78,13 @@ async def create_paper_route(
 @router.get("/papers", response_model=List[Paper_Model])
 async def get_all_papers_route():
     return await get_all_papers()
+
+@router.get("/papers-by-tag", response_model=List[Paper_Model])
+async def get_papers_by_tag_route(tag: str = Query(..., description="Thẻ để lọc bài báo")):
+    papers = await get_papers_by_tag(tag)
+    if not papers:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài báo với thẻ này")
+    return papers
 
 @router.get("/paper/{paper_id}", response_model=dict)
 async def get_paper_by_id_route(paper_id: str):
@@ -86,9 +98,13 @@ async def update_paper_route(
     paper_id: str,
     title: Optional[str] = Form(None),
     content: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None)
+    image: Optional[UploadFile] = File(None),
+    author: Optional[str] = Form(None),
+    authorImage: Optional[UploadFile] = File(None),
+    authorDescription: Optional[str] = Form(None),
+    tags: Optional[List[str]] = Form(None)
 ):
-    paper = await update_paper(paper_id, title, content, image)
+    paper = await update_paper(paper_id, title, content, image, author, authorImage, authorDescription, tags)
     if not paper:
         raise HTTPException(status_code=404, detail="Bài báo không tồn tại hoặc không có thay đổi")
     return paper.__dict__
@@ -109,12 +125,33 @@ async def create_legit_hospital_route(
     img: Optional[UploadFile] = File(None),
     yearEstablished: Optional[int] = Form(None),
     specialties: List[str] = Form(...),
-    region: Optional[str] = Form(None)
+    region: Optional[str] = Form(None),
+    hospitalDescription: Optional[str] = Form(None),
+    rate: Optional[float] = Form(5.0)  # Default rate is 5
 ):
     hospital = await create_legit_hospital(name, address, phone, img, yearEstablished, specialties, region)
     if not hospital:
         raise HTTPException(status_code=400, detail="Không thể tạo bệnh viện")
     return hospital.model_dump(by_alias=True)
+
+@router.put("/update-legit-hospital/{hospital_id}", response_model=dict)
+async def update_legit_hospital_route(
+    hospital_id: str,
+    name: Optional[str] = Form(None),
+    address: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    img: Optional[UploadFile] = File(None),
+    yearEstablished: Optional[int] = Form(None),
+    specialties: Optional[List[str]] = Form(None),
+    region: Optional[str] = Form(None),
+    hospitalDescription: Optional[str] = Form(None),
+    rate: Optional[float] = Form(5.0)  # Default rate is 5
+):
+    hospital = await update_legit_hospital(hospital_id, name, address, phone, img, yearEstablished, specialties, region, hospitalDescription, rate)
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Bệnh viện không tồn tại hoặc không có thay đổi")
+    return hospital.model_dump(by_alias=True)
+
 
 @router.get("/legit-hospitals", response_model=List[LegitHospitalModel])
 async def get_all_legit_hospitals_route():

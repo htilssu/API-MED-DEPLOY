@@ -29,4 +29,3 @@ python-multipart
 bcrypt
 huggingface_hub 
 cloudinary
-cloudinary.uploader 

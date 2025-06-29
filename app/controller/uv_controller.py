@@ -20,6 +20,24 @@ def get_uv_index(lat: float, lon: float, api_key: str):
         print(f"Lỗi khi gọi API: {response.status_code}")
         print(response.text)
         return None
+    
+def get_level_uv(uv_value: float) -> str:
+    """
+    Trả về mức độ chỉ số UV dựa trên giá trị.
+    """
+    if uv_value is None:
+        return "Không thể xác định mức độ UV."
+
+    if uv_value <= 2:
+        return "Thấp"
+    elif uv_value <= 5:
+        return "Trung bình"
+    elif uv_value <= 7:
+        return "Cao"
+    elif uv_value <= 10:
+        return "Rất cao"
+    else:
+        return "Nguy hiểm"
 
 def uv_warning_level(uv_value: float) -> str:
     """
@@ -42,5 +60,8 @@ def uv_warning_level(uv_value: float) -> str:
 def check_and_warn_uv(lat: float, lon: float, api_key: str):
     uv_value = get_uv_index(lat, lon, api_key)
     warning_message = uv_warning_level(uv_value)
+    level_uv=get_level_uv(uv_value)
     print(warning_message)
-    return warning_message
+    print(f"Chỉ số UV: {uv_value}")
+    print(f"Mức độ UV: {level_uv}")
+    return warning_message,uv_value,level_uv
