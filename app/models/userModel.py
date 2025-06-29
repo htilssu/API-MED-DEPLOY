@@ -70,6 +70,10 @@ class Paper_Model(BaseModel):
     mainImage: Optional[str] = None  # URL của ảnh chính (nếu có)
     content: str
     date: datetime = Field(default_factory=datetime.now)  # Ngày giờ đăng bài
+    author: Optional[str] = None  # Tên tác giả (nếu có)
+    authorImage: Optional[str] = None  # URL ảnh tác giả (nếu có)
+    authorDescription: Optional[str] = None  # Mô tả tác giả (nếu có)
+    tags: Optional[List[str]] = None  # Danh sách các thẻ (nếu có)
     class Config:
         json_encoders = {
             ObjectId: str  # Chuyển ObjectId thành str khi trả về JSON
@@ -78,7 +82,12 @@ class Paper_Model(BaseModel):
             "example": {
                 "title": "Bài viết về bệnh da liễu",
                 "content": "Nội dung bài viết...",
-                "date": "2023-10-01T12:00:00"
+                "date": "2023-10-01T12:00:00",
+                "mainImage": "https://example.com/image.jpg",
+                "author": "Nguyễn Văn A",
+                "authorImage": "https://example.com/author.jpg",
+                "authorDescription": "Chuyên gia da liễu hàng đầu",
+                "tags": ["care", "", "chăm sóc da"]
             }
         }
 
@@ -91,6 +100,8 @@ class LegitHospitalModel(BaseModel):
     yearEstablished: Optional[int] = None
     specialties: List[str]
     region: Optional[str] = None
+    hospitalDescription: Optional[str] = None  # Mô tả bệnh viện (nếu có)
+    rate: Optional[float] = Field(default=5)
 
     class Config:
         json_encoders = {
@@ -104,7 +115,9 @@ class LegitHospitalModel(BaseModel):
                 "img": "http://example.com/hospital.jpg",
                 "yearEstablished": 1990,
                 "specialties": ["Da liễu", "Thẩm mỹ"],
-                "region": "Miền Nam"
+                "region": "Miền Nam",
+                "hospitalDescription": "Bệnh viện chuyên khoa da liễu hàng đầu tại TP.HCM.",
+                "rate": 4.5
             }
         }
         

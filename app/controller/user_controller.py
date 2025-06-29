@@ -67,14 +67,21 @@ async def handle_upload(image: Optional[Upload]) -> Optional[str]:
     return None
 
 # Paper logic
-async def create_paper(title: str, content: str, image: Upload = None):
+async def create_paper(title: str, content: str, image: Upload = None,author: Optional[str] = None, authorImage: Optional[Upload] = None, authorDescription: Optional[str] = None, tags: Optional[List[str]] = None):
     image_url = await handle_upload(image)
-    paper_data = Paper_Model(title=title, content=content, mainImage=image_url)
+    author_image_url = await handle_upload(authorImage) 
+    paper_data = Paper_Model(title=title, content=content, mainImage=image_url,author=author,authorImage=author_image_url , authorDescription=authorDescription, tags=tags)
+    # Kiểm tra tiêu đề và nội dung có tồn tại hay chưa
+    existing_paper= await papers_collection.find_one({"title": title, "content": content})
+    if existing_paper:
+        raise HTTPException(status_code=400, detail="Bài viết với tiêu đề và nội dung này đã tồn tại.")
+    # Chèn dữ liệu vào cơ sở dữ liệu
     result = await papers_collection.insert_one(paper_data.model_dump(by_alias=True, exclude_none=True))
     new_paper = await papers_collection.find_one({"_id": result.inserted_id})
     if new_paper:
         new_paper["_id"] = str(new_paper["_id"])
         return Paper_Model(**new_paper)
+    
     return None
 
 async def get_all_papers():
@@ -91,9 +98,19 @@ async def get_paper_by_id(paper_id: str):
         return Paper_Model(**paper)
     return None
 
-async def update_paper(paper_id: str, title: str = None, content: str = None, image: Upload = None):
-    update_data = {k: v for k, v in [("title", title), ("content", content)] if v is not None}
+async def get_papers_by_tag(tag: str):
+    papers = []
+    async for paper in papers_collection.find({"tags": tag}):
+        paper["_id"] = str(paper["_id"])
+        papers.append(Paper_Model(**paper))
+    return papers
+
+async def update_paper(paper_id: str, title: str = None, content: str = None, image: Upload = None, author: Optional[str] = None, authorImage: Optional[Upload] = None, authorDescription: Optional[str] = None, tags: Optional[List[str]] = None):
+    update_data = {k: v for k, v in [("title", title), ("content", content),("author",author),("authorDescription",authorDescription),("tags",tags)] if v is not None}
     image_url = await handle_upload(image)
+    author_image_url = await handle_upload(authorImage)
+    if author_image_url:
+        update_data["authorImage"] = author_image_url
     if image_url:
         update_data["mainImage"] = image_url
     result = await papers_collection.update_one({"_id": ObjectId(paper_id)}, {"$set": update_data})
@@ -158,7 +175,7 @@ async def delete_check_process(check_process_id: str):
     return result.deleted_count > 0
 
 # Hospital logic
-async def create_legit_hospital(name: str, address: str, phone: Optional[str] = None, img: Optional[Upload] = None, yearEstablished: Optional[int] = None, specialties: List[str] = [], region: Optional[str] = None):
+async def create_legit_hospital(name: str, address: str, phone: Optional[str] = None, img: Optional[Upload] = None, yearEstablished: Optional[int] = None, specialties: List[str] = [], region: Optional[str] = None,hospitalDescription: Optional[str] = None, rate: Optional[float] = None):
     img_url = await handle_upload(img)
     data = LegitHospitalModel(
         name=name,
@@ -167,7 +184,9 @@ async def create_legit_hospital(name: str, address: str, phone: Optional[str] = 
         img=img_url,
         yearEstablished=yearEstablished,
         specialties=specialties,
-        region=region
+        region=region,
+        hospitalDescription=hospitalDescription,
+        rate=rate
     )
     result = await legit_hospitals_collection.insert_one(data.model_dump(by_alias=True, exclude_none=True))
     new_doc = await legit_hospitals_collection.find_one({"_id": result.inserted_id})
@@ -190,8 +209,8 @@ async def get_legit_hospital_by_id(hospital_id: str):
         return LegitHospitalModel(**hospital)
     return None
 
-async def update_legit_hospital(hospital_id: str, name: str = None, address: str = None, phone: str = None, img: Upload = None, yearEstablished: int = None, specialties: list = None, region: str = None):
-    update_data = {k: v for k, v in [("name", name), ("address", address), ("phone", phone), ("yearEstablished", yearEstablished), ("specialties", specialties), ("region", region)] if v is not None}
+async def update_legit_hospital(hospital_id: str, name: str = None, address: str = None, phone: str = None, img: Upload = None, yearEstablished: int = None, specialties: list = None, region: str = None, hospitalDescription: Optional[str] = None, rate: Optional[float] = None):
+    update_data = {k: v for k, v in [("name", name), ("address", address), ("phone", phone), ("yearEstablished", yearEstablished), ("specialties", specialties), ("region", region),("hospitalDescription",hospitalDescription),("rate",rate )] if v is not None}
     img_url = await handle_upload(img)
     if img_url:
         update_data["img"] = img_url
