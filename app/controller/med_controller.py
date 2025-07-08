@@ -29,6 +29,8 @@ from pydantic import BaseModel
 from app.redis_client import redis_client, save_result_to_redis,get_result_by_key
 import hashlib
 from app.db.mongo import db
+from geopy.geocoders import Nominatim
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -38,7 +40,7 @@ app = FastAPI()
 load_dotenv()
 login(token=os.getenv("HUGGINGFACE_TOKEN"))
 
-GCS_BUCKET = "kltn-2025"
+GCS_BUCKET = "test_storage_1000000image"
 GCS_IMAGE_PATH = "uploaded_images/"
 GCS_KEY_PATH = storage.Client.from_service_account_json("app/iamkey.json")
 VECTOR_FILE = "static/processed/embedded_vectors.json"
@@ -47,14 +49,10 @@ GCS_DATASET = f"dataset"
 GCS_DATASET_PATH = f"{GCS_DATASET}/dataset.json"
 GCS_INDEX_PATH = f"{GCS_FOLDER}/faiss_index.bin"
 GCS_LABELS_PATH = f"{GCS_FOLDER}/labels.npy"
-GCS_TEXT_INDEX_PATH = f"{GCS_FOLDER}/faiss_text_index.bin"
-GCS_TEXT_LABELS_PATH = f"{GCS_FOLDER}/text_labels.npy"
 GCS_ANOMALY_INDEX_PATH = f"{GCS_FOLDER}/faiss_index_anomaly.bin"
 GCS_ANOMALY_LABELS_PATH = f"{GCS_FOLDER}/labels_anomaly.npy"
 LOCAL_INDEX_PATH = "app/static/faiss/faiss_index.bin"
 LOCAL_LABELS_PATH = "app/static/labels/labels.npy"
-LOCAL_TEXT_INDEX_PATH = "app/static/faiss/faiss_text_index.bin"
-LOCAL_TEXT_LABELS_PATH = "app/static/labels/text_labels.npy"
 LOCAL_ANOMALY_INDEX_PATH = "app/static/faiss/faiss_index_anomaly.bin"
 LOCAL_ANOMALY_LABELS_PATH = "app/static/labels/labels_anomaly.npy"
 LOCAL_DATASET_PATH = "app/static/json/dataset.json"
@@ -80,8 +78,6 @@ def download_from_gcs():
     files_to_download = [
         (GCS_INDEX_PATH, LOCAL_INDEX_PATH),
         (GCS_LABELS_PATH, LOCAL_LABELS_PATH),
-        (GCS_TEXT_INDEX_PATH, LOCAL_TEXT_INDEX_PATH),
-        (GCS_TEXT_LABELS_PATH, LOCAL_TEXT_LABELS_PATH),
         (GCS_ANOMALY_INDEX_PATH, LOCAL_ANOMALY_INDEX_PATH),
         (GCS_ANOMALY_LABELS_PATH, LOCAL_ANOMALY_LABELS_PATH),
         (GCS_DATASET_PATH, LOCAL_DATASET_PATH),
@@ -112,6 +108,36 @@ def preprocess_image(image_data: bytes) -> Optional[np.ndarray]:
     except Exception as e:
         logger.error(f"Lỗi xử lý ảnh: {e}")
         return None
+
+def extract_disease_name(label_str):
+    """
+    Trích xuất tên bệnh lý (disease name) từ chuỗi nhãn.
+    Ví dụ: Từ "NON-INFECTIOUS DISEASES/LIGHT DISEASES AND DISORDERS PHOTOS/Actinic Keratosis"
+    trả về "Actinic Keratosis".
+    
+    Args:
+        label_str (str): Chuỗi nhãn chứa thông tin phân cấp.
+    
+    Returns:
+        str: Tên bệnh lý, hoặc "unknown" nếu không trích xuất được.
+    """
+    try:
+        # Tách chuỗi nhãn thành các phần dựa trên dấu "/"
+        parts = label_str.split("/")
+        if not parts:
+            return "unknown"
+        
+        # Lấy phần cuối cùng (tên bệnh lý)
+        disease_name = parts[-1].strip()
+        
+        # Kiểm tra nếu tên bệnh không rỗng
+        if not disease_name:
+            return "unknown"
+        
+        return disease_name
+    except Exception as e:
+        print(f"Lỗi khi trích xuất tên bệnh từ {label_str}: {e}")
+        return "unknown"
 
 def embed_image(image_data: bytes):
     try:
@@ -164,11 +190,6 @@ def load_faiss_index():
             logger.info(f"FAISS Index tải thành công! Tổng số vector: {index.ntotal}")
         else:
             logger.warning("FAISS Index không tồn tại!")
-        if os.path.exists(LOCAL_TEXT_LABELS_PATH):
-            labels = np.load(LOCAL_TEXT_LABELS_PATH, allow_pickle=True).tolist()
-            logger.info(f"Đã tải {len(labels)} nhãn bệnh từ labels.npy")
-        else:
-            logger.warning("labels.npy không tồn tại!")
         if os.path.exists(LOCAL_ANOMALY_INDEX_PATH):
             anomaly_index = faiss.read_index(LOCAL_ANOMALY_INDEX_PATH)
             logger.info(f"FAISS Anomaly Index tải thành công! Tổng số vector: {anomaly_index.ntotal}")
@@ -436,25 +457,25 @@ def upload_json_to_gcs(bucket_name: str, destination_blob_name: str, source_file
     print(f"Uploaded {source_file_name} to {destination_blob_name}.")
     
 
-def search_final(name):
-    translate_name=translate_disease_name(name)
-    print(f"Tên bệnh đã dịch: {translate_name}")
-    search_json_result = search_disease_in_json(LOCAL_DATASET_PATH, translate_name)
-    if search_json_result:
-        print(f"Kết quả tìm kiếm trong file JSON: {search_json_result}")
-    else:
-        print(f"Không tìm thấy tên bệnh '{translate_name}' trong file JSON.")
-        print ("Bắt đầu tìm kiếm bằng MedlinePlus...")
-        search_medline_result = search_medlineplus(name)
-        print(f"Kết quả tìm kiếm MedlinePlus: {search_medline_result}")
-        print ("Bắt đầu trích xuất thông tin y khoa từ MedlinePlus...")
-        extract_medical_info_result = extract_medical_info(search_medline_result)
-        if extract_medical_info_result:
-            print(f"Kết quả trích xuất thông tin y khoa: {extract_medical_info_result}")
-            print("Đang thêm thông tin vào file JSON...")
-            append_disease_to_json(LOCAL_DATASET_PATH, extract_medical_info_result)
-            print("Upload file JSON lên GCS...")
-            upload_json_to_gcs(GCS_BUCKET, GCS_DATASET_PATH, LOCAL_DATASET_PATH)
+# def search_final(name):
+#     translate_name=translate_disease_name(name)
+#     print(f"Tên bệnh đã dịch: {translate_name}")
+#     search_json_result = search_disease_in_json(LOCAL_DATASET_PATH, translate_name)
+#     if search_json_result:
+#         print(f"Kết quả tìm kiếm trong file JSON: {search_json_result}")
+#     else:
+#         print(f"Không tìm thấy tên bệnh '{translate_name}' trong file JSON.")
+#         print ("Bắt đầu tìm kiếm bằng MedlinePlus...")
+#         search_medline_result = search_medlineplus(name)
+#         print(f"Kết quả tìm kiếm MedlinePlus: {search_medline_result}")
+#         print ("Bắt đầu trích xuất thông tin y khoa từ MedlinePlus...")
+#         extract_medical_info_result = extract_medical_info(search_medline_result)
+#         if extract_medical_info_result:
+#             print(f"Kết quả trích xuất thông tin y khoa: {extract_medical_info_result}")
+#             print("Đang thêm thông tin vào file JSON...")
+#             # append_disease_to_json(LOCAL_DATASET_PATH, extract_medical_info_result)
+#             # print("Upload file JSON lên GCS...")
+#             # upload_json_to_gcs(GCS_BUCKET, GCS_DATASET_PATH, LOCAL_DATASET_PATH)
 
 def translate_disease_name(disease_name: str) -> str:
     prompt = f"""
@@ -596,6 +617,8 @@ def process_image(image_data: bytes):
     detailed_labels_normal = []
     if embedding is not None:
         detailed_labels_normal = search_similar_images(embedding)
+        #Cắt nhãn
+        detailed_labels_normal = [extract_disease_name(item["label"]) for item in detailed_labels_normal]
         result_labels_simple = [item["label"] for item in detailed_labels_normal]
         logger.info("🔍 Ảnh gốc:")
         for item in detailed_labels_normal:
@@ -620,6 +643,7 @@ def process_image(image_data: bytes):
     logger.info(f"Nhãn tổng hợp cuối cùng: {final_labels}")
 
     return final_labels, result_labels_simple, anomaly_result_labels_simple, detailed_labels_normal, detailed_labels_anomaly
+
 async def start_diagnois(image: UploadFile = File(...),user_id: Optional[str] = None):
     try:
         download_from_gcs()
@@ -765,12 +789,37 @@ async def submit_differation_questions(user_answers:dict,key:str):
     except HTTPException as e:
         logger.error(f"Lỗi khi loại trừ nhãn không phù hợp: {e.detail}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi loại trừ nhãn không phù hợp: {str(e)}")
+    
+
+def generate_disease_name(disease_name: str) -> str:
+    prompt = f"""
+    Bạn là một chuyên gia y tế, bạn có khả năng chuyển hóa tên bệnh về tên chuẩn nhất của nó (tên khoa học)
+    Tên bệnh được truyền vào là: {disease_name}
+    Hãy chuyển hóa tên bệnh đó về tên khoa học chuẩn nhất.
+    Trả về tên bệnh đã chuyển hóa.
+    Nếu không thể chuyển hóa, hãy trả về "Không thể chuyển hóa tên bệnh".
+    """
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        result = re.sub(r"^(?:\w+)?\n|\n$", "", result).strip()
+        if not result:
+            return "Không thể dịch tên bệnh"
+        logger.info(f"Dịch tên bệnh: {disease_name} -> {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Lỗi khi dịch tên bệnh: {e}")
+        return "Xảy ra lỗi trong quá trình dịch tên bệnh"
         
 async def knowledge(disease_name: str):
     try:
         if not disease_name:
             raise HTTPException(status_code=400, detail="Cần cung cấp tên bệnh")
-        translated_name = translate_disease_name(disease_name)
+        disease_name = generate_disease_name(disease_name)
+        if not disease_name or disease_name == "Không thể chuyển hóa tên bệnh":
+            raise HTTPException(status_code=400, detail="Không thể chuyển hóa tên bệnh")
+        translated_name= translate_disease_name(disease_name)
         search_result = search_disease_in_json(LOCAL_DATASET_PATH, translated_name)
         if not search_result:
             medline_result = search_medlineplus(disease_name)
@@ -798,3 +847,4 @@ async def get_final_result(key: str):
     except Exception as e:
         logger.error(f"Lỗi khi lấy kết quả chẩn đoán: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi lấy kết quả chẩn đoán")
+

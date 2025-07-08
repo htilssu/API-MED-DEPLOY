@@ -120,6 +120,21 @@ async def delete_paper(paper_id: str):
     result = await papers_collection.delete_one({"_id": ObjectId(paper_id)})
     return result.deleted_count > 0
 
+async def search_papers(query: str):
+    """
+    Tìm kiếm bài viết theo tiêu đề hoặc nội dung.
+    """
+    papers = []
+    async for paper in papers_collection.find({
+        "$or": [
+            {"title": {"$regex": query, "$options": "i"}},
+            {"content": {"$regex": query, "$options": "i"}}
+        ]
+    }):
+        paper["_id"] = str(paper["_id"])
+        papers.append(Paper_Model(**paper))
+    return papers
+
 # Check process logic
 # Helper: Convert _id sang str
 def convert_id(doc):
