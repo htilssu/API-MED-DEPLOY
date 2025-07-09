@@ -6,7 +6,16 @@ from dotenv import load_dotenv
 from app.config.cloudinary_config import cloudinary
 from io import BytesIO
 from typing import List, Optional
+from bson.errors import InvalidId
 
+def convert_tags_to_object_ids(tags: Optional[List[str]]) -> List[ObjectId]:
+    object_ids = []
+    for tag in tags or []:
+        try:
+            object_ids.append(ObjectId(tag))
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Tag ID không hợp lệ: {tag}")
+    return object_ids
 
 def upload_image_bytes(image_bytes):
     response = cloudinary.uploader.upload(BytesIO(image_bytes))
@@ -104,6 +113,7 @@ async def handle_upload(image: Optional[Upload]) -> Optional[str]:
 # Paper logic
 async def create_paper(title: str, content: str, image: Upload = None,author: Optional[str] = None, authorImage: Optional[Upload] = None, authorDescription: Optional[str] = None, tags: Optional[List[str]] = None):
     image_url = await handle_upload(image)
+    tags= convert_tags_to_object_ids(tags) if tags else []
     author_image_url = await handle_upload(authorImage) 
     paper_data = Paper_Model(title=title, content=content, mainImage=image_url,author=author,authorImage=author_image_url , authorDescription=authorDescription, tags=tags)
     # Kiểm tra tiêu đề và nội dung có tồn tại hay chưa
@@ -134,6 +144,10 @@ async def get_paper_by_id(paper_id: str):
     return None
 
 async def get_papers_by_tag(tag: str):
+    try:
+        tag_id = ObjectId(tag)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="ID tag không hợp lệ.")
     papers = []
     async for paper in papers_collection.find({"tags": tag}):
         paper["_id"] = str(paper["_id"])
@@ -141,7 +155,10 @@ async def get_papers_by_tag(tag: str):
     return papers
 
 async def update_paper(paper_id: str, title: str = None, content: str = None, image: Upload = None, author: Optional[str] = None, authorImage: Optional[Upload] = None, authorDescription: Optional[str] = None, tags: Optional[List[str]] = None):
+    if tags is not None:
+        tags = convert_tags_to_object_ids(tags)
     update_data = {k: v for k, v in [("title", title), ("content", content),("author",author),("authorDescription",authorDescription),("tags",tags)] if v is not None}
+    
     image_url = await handle_upload(image)
     author_image_url = await handle_upload(authorImage)
     if author_image_url:
