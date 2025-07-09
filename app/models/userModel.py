@@ -76,7 +76,8 @@ class Paper_Model(BaseModel):
     author: Optional[str] = None  # Tên tác giả (nếu có)
     authorImage: Optional[str] = None  # URL ảnh tác giả (nếu có)
     authorDescription: Optional[str] = None  # Mô tả tác giả (nếu có)
-    tags: Optional[List[str]] = None  # Danh sách các thẻ (nếu có)
+    #tags:Là id của tag
+    tags: ObjectId = Field(default=None, alias="_id")  # Sử dụng ObjectId cho tags
     class Config:
         json_encoders = {
             ObjectId: str  # Chuyển ObjectId thành str khi trả về JSON
@@ -90,7 +91,7 @@ class Paper_Model(BaseModel):
                 "author": "Nguyễn Văn A",
                 "authorImage": "https://example.com/author.jpg",
                 "authorDescription": "Chuyên gia da liễu hàng đầu",
-                "tags": ["care", "", "chăm sóc da"]
+                "tags": ["60c72b2f9b1e8b001c8e4d3a", "60c72b2f9b1e8b001c8e4d3b"]  # Danh sách ID của các tag
             }
         }
 
