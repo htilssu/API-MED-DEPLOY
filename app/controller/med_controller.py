@@ -109,35 +109,54 @@ def preprocess_image(image_data: bytes) -> Optional[np.ndarray]:
         logger.error(f"Lỗi xử lý ảnh: {e}")
         return None
 
-def extract_disease_name(label_str):
-    """
-    Trích xuất tên bệnh lý (disease name) từ chuỗi nhãn.
-    Ví dụ: Từ "NON-INFECTIOUS DISEASES/LIGHT DISEASES AND DISORDERS PHOTOS/Actinic Keratosis"
-    trả về "Actinic Keratosis".
+def extract_disease_named(results: list) -> list:
+    simplified = []
+    for item in results:
+        try:
+            label = item['label'].split('/')[-1]
+            simplified.append({
+                'label': label,
+                'cosine_similarity': item['cosine_similarity']
+            })
+        except Exception as e:
+            print(f"Lỗi khi xử lý item {item}: {e}")
+    return simplified
+
+# Ví dụ sử dụng
+input_data = {
+    'label': 'NON-INFECTIOUS DISEASES/PIGMENTARY DISORDERS/Vitiligo',
+    'cosine_similarity': 55.540950775146484
+}
+
     
-    Args:
-        label_str (str): Chuỗi nhãn chứa thông tin phân cấp.
-    
-    Returns:
-        str: Tên bệnh lý, hoặc "unknown" nếu không trích xuất được.
+def extract_disease_name_and_similarity(label_str: str) -> Dict[str, float]:
+    prompt = f"""Đây là một chuỗi nhãn bệnh lý: "{label_str}". Bạn hãy lọc dữ liệu giúp tôi bao gồm tên nhãn bệnh và 
+    similarity của nó ví dụ 'label': 'NON-INFECTIOUS DISEASES/PIGMENTARY DISORDERS/Vitiligo', 'cosine_similarity': 55.540950775146484
+    Thì bạn sẽ trả về kết quả là "{'label': 'Vitiligo', 'cosine_similarity': 55.540950775146484}".
+    Nếu không có tên bệnh lý nào, hãy trả về "unknown" cho label và 0.0 cho similarity.
+    Trả về kết quả dưới dạng JSON hợp lệ, không có Markdown hay ký tự thừa.
     """
     try:
-        # Tách chuỗi nhãn thành các phần dựa trên dấu "/"
-        parts = label_str.split("/")
-        if not parts:
-            return "unknown"
-        
-        # Lấy phần cuối cùng (tên bệnh lý)
-        disease_name = parts[-1].strip()
-        
-        # Kiểm tra nếu tên bệnh không rỗng
-        if not disease_name:
-            return "unknown"
-        
-        return disease_name
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        # Xử lý kết quả trả về
+        if text.lower() == "unknown":
+            return {"label": "unknown", "cosine_similarity": 0.0}
+        # Loại bỏ dấu ngoặc kép và ký tự thừa
+        text = re.sub(r'^\{|\}$', '', text).strip()
+        # Chuyển đổi chuỗi thành dict
+        result = json.loads(text)
+        # Kiểm tra và chuẩn hóa kết quả
+        if "label" not in result or "cosine_similarity" not in result:
+            raise ValueError("Kết quả không hợp lệ, thiếu trường 'label' hoặc 'cosine_similarity'")
+        # Chuyển đổi similarity về float
+        result["cosine_similarity"] = float(result["cosine_similarity"])
+        # Trả về kết quả
+        return result
     except Exception as e:
-        print(f"Lỗi khi trích xuất tên bệnh từ {label_str}: {e}")
-        return "unknown"
+        print(f"Lỗi khi trích xuất tên bệnh và similarity từ '{label_str}': {e}")
+        return "Không thể trích xuất tên bệnh"
 
 def embed_image(image_data: bytes):
     try:
@@ -183,30 +202,46 @@ def embed_anomaly_map(anomaly_map: np.ndarray):
         return None
 
 def load_faiss_index():
-    global index, labels, anomaly_index, anomaly_labels
-    try:
-        if os.path.exists(LOCAL_INDEX_PATH):
+    """Tải FAISS Index và nhãn bệnh từ file."""
+    global index, labels,anomaly_index,anomaly_labels
+    if os.path.exists(LOCAL_INDEX_PATH):
+        try:
             index = faiss.read_index(LOCAL_INDEX_PATH)
-            logger.info(f"FAISS Index tải thành công! Tổng số vector: {index.ntotal}")
-        else:
-            logger.warning("FAISS Index không tồn tại!")
-        if os.path.exists(LOCAL_ANOMALY_INDEX_PATH):
+            print(f"FAISS Index tải thành công! Tổng số vector: {index.ntotal}")
+        except Exception as e:
+            print(f"Lỗi tải FAISS Index: {e}")
+            index = None
+    else:
+        print("FAISS Index không tồn tại!")
+
+    if os.path.exists(LOCAL_ANOMALY_INDEX_PATH):
+        try:
             anomaly_index = faiss.read_index(LOCAL_ANOMALY_INDEX_PATH)
-            logger.info(f"FAISS Anomaly Index tải thành công! Tổng số vector: {anomaly_index.ntotal}")
-        else:
-            logger.warning("FAISS Anomaly Index không tồn tại!")
-        if os.path.exists(LOCAL_ANOMALY_LABELS_PATH):
-            anomaly_labels = np.load(LOCAL_ANOMALY_LABELS_PATH, allow_pickle=True).tolist()
-            logger.info(f"Đã tải {len(anomaly_labels)} nhãn bệnh từ labels_anomaly.npy")
-        else:
-            logger.warning("labels_anomaly.npy không tồn tại!")
-    except Exception as e:
-        logger.error(f"Lỗi tải FAISS Index: {e}")
+            print(f"FAISS Anomaly Index tải thành công! Tổng số vector: {anomaly_index.ntotal}")
+        except Exception as e:
+            print(f"Lỗi tải FAISS Anomaly Index: {e}")
+            anomaly_index = None
+    else:
+        print("FAISS Anomaly Index không tồn tại!")
+    if os.path.exists(LOCAL_ANOMALY_LABELS_PATH):
+        anomaly_labels = np.load(LOCAL_ANOMALY_LABELS_PATH, allow_pickle=True).tolist()
+        print(f"Đã tải {len(anomaly_labels)} nhãn bệnh từ labels-anomaly.npy")
+    else:
+        print("labels-anomaly.npy không tồn tại!")
+    if os.path.exists(LOCAL_LABELS_PATH):
+        labels = np.load(LOCAL_LABELS_PATH, allow_pickle=True).item()
+        print(f"Đã tải {len(labels)} nhãn bệnh từ labels.npy")
+        print(labels)
+    else:
+        print("labels.npy không tồn tại!")
+
 
 def search_similar_images(query_vector, top_k=5):
     if index is None or index.ntotal == 0:
         logger.warning("FAISS index trống!")
         return []
+    if index.ntotal != len(labels):
+        logger.warning(f"Số vector ({index.ntotal}) không khớp với nhãn ({len(labels)}). Kết quả có thể không chính xác!")
     try:
         if query_vector.ndim == 1:
             query_vector = np.expand_dims(query_vector, axis=0)
@@ -217,19 +252,23 @@ def search_similar_images(query_vector, top_k=5):
         logger.info(f"Cosine similarities: {distances}")
 
         similar_results = []
+        labels_keys = list(labels.keys()) if labels else []
         for idx, sim in zip(indices[0], distances[0]):
-            if sim < 80:  # Loại bỏ nhãn có similarity dưới 0.8
+            logger.debug(f"Xử lý idx: {idx}, similarity: {sim}")
+            if sim < 55:  # Ngưỡng lọc, điều chỉnh nếu cần
                 continue
-            if 0 <= idx < len(labels):
-                label_filename = list(labels.keys())[idx]
-                label = labels[label_filename]
+            if 0 <= idx < len(labels_keys):
+                label_filename = labels_keys[idx]
+                label = labels.get(label_filename, "unknown")
             else:
-                logger.warning(f"Index {idx} vượt phạm vi labels ({len(labels)})!")
-                label = "unknown"
+                logger.warning(f"Index {idx} vượt phạm vi labels ({len(labels_keys)})!")
+                continue  # Bỏ qua nếu chỉ số không hợp lệ
             similar_results.append({
                 "label": label,
                 "cosine_similarity": float(sim)
             })
+        # for result in similar_results:
+        #     print(f"Label: {result['label']}, Cosine Similarity: {result['cosine_similarity']:.4f}")
         return similar_results
     except Exception as e:
         logger.error(f"Lỗi tìm kiếm ảnh tương tự: {e}")
@@ -239,29 +278,35 @@ def search_anomaly_images(query_vector, top_k=5):
     if anomaly_index is None or anomaly_index.ntotal == 0:
         logger.warning("FAISS Anomaly Index trống!")
         return []
+    if anomaly_index.ntotal != len(anomaly_labels):
+        logger.warning(f"Số vector ({anomaly_index.ntotal}) không khớp với nhãn bất thường ({len(anomaly_labels)}). Kết quả có thể không chính xác!")
     try:
         if query_vector.ndim == 1:
             query_vector = np.expand_dims(query_vector, axis=0)
         faiss.normalize_L2(query_vector)
 
         distances, indices = anomaly_index.search(query_vector, top_k)
-        logger.info(f"Chỉ số tìm thấy: {indices}")
+        logger.info(f"Chỉ số tìm thấy (anomaly): {indices}")
         logger.info(f"Cosine similarities (anomaly): {distances}")
 
         similar_results = []
+        anomaly_labels_keys = list(anomaly_labels.keys()) if anomaly_labels else []
         for idx, sim in zip(indices[0], distances[0]):
-            if sim < 80:  # Loại bỏ nhãn có similarity dưới 0.8
-                continue    
-            if 0 <= idx < len(anomaly_labels):
-                label_filename = list(anomaly_labels.keys())[idx]
-                label = anomaly_labels[label_filename]
+            logger.debug(f"Xử lý idx (anomaly): {idx}, similarity: {sim}")
+            if sim < 55:  # Ngưỡng lọc, điều chỉnh nếu cần
+                continue
+            if 0 <= idx < len(anomaly_labels_keys):
+                label_filename = anomaly_labels_keys[idx]
+                label = anomaly_labels.get(label_filename, "unknown")
             else:
-                logger.warning(f"Index {idx} vượt phạm vi labels_anomaly ({len(anomaly_labels)})!")
-                label = "unknown"
+                logger.warning(f"Index {idx} vượt phạm vi labels_anomaly ({len(anomaly_labels_keys)})!")
+                continue  # Bỏ qua nếu chỉ số không hợp lệ
             similar_results.append({
                 "label": label,
                 "cosine_similarity": float(sim)
             })
+              # for result in similar_results:
+        #     print(f"Label: {result['label']}, Cosine Similarity: {result['cosine_similarity']:.4f}")
         return similar_results
     except Exception as e:
         logger.error(f"Lỗi tìm kiếm ảnh anomaly: {e}")
@@ -287,7 +332,7 @@ def combine_labels(detailed_labels_normal: List[Dict], detailed_labels_anomaly: 
         sim = item["cosine_similarity"]
         # Chuẩn hóa similarity nếu ở thang 0-100
         normalized_sim = sim / 100.0 if sim > 1.0 else sim
-        if normalized_sim < 0.8:  # Loại bỏ nhãn có similarity < 0.8
+        if normalized_sim < 0.5:  # Loại bỏ nhãn có similarity < 0.8
             continue
         # Giữ nhãn có similarity cao nhất nếu trùng lặp
         if label not in seen_labels or normalized_sim > seen_labels[label]:
@@ -601,7 +646,14 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 def process_image(image_data: bytes):
+    if not image_data:
+        logger.error("Không có dữ liệu ảnh để xử lý.")
+        return None, [], [], [], []
+    else:
+        print("Đã nhận dữ liệu ảnh, bắt đầu xử lý...")
+        logger.info("Bắt đầu xử lý ảnh...")
     processed = preprocess_image(image_data)
+    print("Đã xử lý ảnh",processed)
     if processed is None:
         logger.error("Lỗi xử lý ảnh, dừng quy trình.")
         return None, [], [], [], []
@@ -617,9 +669,12 @@ def process_image(image_data: bytes):
     detailed_labels_normal = []
     if embedding is not None:
         detailed_labels_normal = search_similar_images(embedding)
+        print("detailed_labels_normal",detailed_labels_normal)
         #Cắt nhãn
-        detailed_labels_normal = [extract_disease_name(item["label"]) for item in detailed_labels_normal]
+        detailed_labels_normal = extract_disease_named(detailed_labels_normal)
+        print("detailed_labels_normal sau khi cắt",detailed_labels_normal)
         result_labels_simple = [item["label"] for item in detailed_labels_normal]
+        print("result_labels_simple",result_labels_simple)
         logger.info("🔍 Ảnh gốc:")
         for item in detailed_labels_normal:
             logger.info(f"- {item['label']} (cosine: {item['cosine_similarity']:.4f})")
@@ -635,6 +690,10 @@ def process_image(image_data: bytes):
         anomaly_map_embedding = embed_anomaly_map(anomaly_map)
         if anomaly_map_embedding is not None:
             detailed_labels_anomaly = search_anomaly_images(anomaly_map_embedding)
+            print("detailed_labels_anomaly",detailed_labels_anomaly)
+            # Cắt nhãn
+            detailed_labels_anomaly = extract_disease_named(detailed_labels_anomaly)
+            print("detailed_labels_anomaly sau khi cắt",detailed_labels_anomaly)
             anomaly_result_labels_simple = [item["label"] for item in detailed_labels_anomaly]
             logger.info("Anomaly Map:")
             for item in detailed_labels_anomaly:
@@ -656,7 +715,7 @@ async def start_diagnois(image: UploadFile = File(...),user_id: Optional[str] = 
         print(f"Key người dùng: {Key}")
         final_labels, result_labels_simple, anomaly_result_labels_simple, detailed_labels_normal, detailed_labels_anomaly = process_image(image_data)
         if not final_labels:
-            raise HTTPException(status_code=500, detail="Không thể xử lý ảnh")
+            raise HTTPException(status_code=500, detail="Không có final_labels được tạo")
 
         image_description = generate_description_with_Gemini(image_data)
         if not image_description:

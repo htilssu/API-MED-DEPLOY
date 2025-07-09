@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File,Query,Body,Form, HTTPException
-from app.controller.med_controller import start_diagnois,get_diagnosis_result,get_differentiation_questions,submit_differation_questions,knowledge,submit_user_description,get_final_result
+from app.controller.med_controller import start_diagnois,get_diagnosis_result,get_differentiation_questions,submit_differation_questions,knowledge,submit_user_description,get_final_result,generate_disease_name
 from fastapi.responses import JSONResponse
 # from app.models.userModel import PostUserDescriptionModel
 router = APIRouter()
@@ -60,3 +60,12 @@ async def get_final_diagnose(key: str):
         return result  
     except Exception as e:
         raise HTTPException(status_code=500, detail="Lỗi không xác định")
+    
+@router.get("/generate-disease-name")
+async def generate_disease_name_route(
+    disease_name: str = Query(..., description="Tên bệnh cần tạo (tiếng Việt hoặc tiếng Anh)")
+):
+    """
+    Tạo tên bệnh từ mô tả triệu chứng.
+    """
+    return await generate_disease_name(disease_name)
