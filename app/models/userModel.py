@@ -26,6 +26,9 @@ class UserModel(BaseModel):
                 "dateOfBirth": "2004-01-10"
             }
         }
+class TagModel(BaseModel):
+    id: Optional[str] = Field(alias="_id")
+    name: str
 
 #Model Thông tin chuẩn đoán
 class DiagnoseModel(BaseModel):

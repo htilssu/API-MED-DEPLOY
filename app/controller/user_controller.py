@@ -1,4 +1,4 @@
-from app.models.userModel import DiagnoseModel,Paper_Model, CheckProcessModel, LegitHospitalModel
+from app.models.userModel import DiagnoseModel,Paper_Model, CheckProcessModel, LegitHospitalModel,TagModel
 from fastapi import APIRouter, UploadFile as Upload, File, HTTPException
 from app.db.mongo import db
 from bson import ObjectId
@@ -18,8 +18,43 @@ diagnoses_collection = db["diagnoses"]
 papers_collection = db["papers"]
 check_process_collection = db["check_process"]
 legit_hospitals_collection = db["legit_hospitals"]
+tags_collection = db["tags"]
 
+async def create_tag(name: str):
+    """
+    Tạo một thẻ mới.
+    """
+    existing_tag = await tags_collection.find_one({"name": name})
+    if existing_tag:
+        raise HTTPException(status_code=400, detail="Thẻ đã tồn tại")
+    tag_data = TagModel(name=name)
+    result = await tags_collection.insert_one(tag_data.model_dump(by_alias=True, exclude_none=True
+    ))
+    new_tag = await tags_collection.find_one({"_id": result.inserted_id})
+    if new_tag:
+        new_tag["_id"] = str(new_tag["_id"])  # Chuyển ObjectId thành str
+        return TagModel(**new_tag)
+    return None
 
+async def get_all_tags():
+    """
+    Lấy tất cả các thẻ.
+    """
+    tags = []
+    async for tag in tags_collection.find():
+        tag["_id"] = str(tag["_id"])  # Chuyển ObjectId thành str
+        tags.append(TagModel(**tag))
+    return tags
+
+async def get_tag_by_id(tag_id: str):
+    """
+    Lấy thông tin thẻ theo ID.
+    """
+    tag = await tags_collection.find_one({"_id": ObjectId(tag_id)})
+    if tag:
+        tag["_id"] = str(tag["_id"])  # Chuyển ObjectId thành str
+        return TagModel(**tag)
+    return None
 
 async def create_diagnosis(diagnosis_data: DiagnoseModel):
     """
