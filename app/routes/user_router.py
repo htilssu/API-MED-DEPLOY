@@ -130,7 +130,7 @@ async def create_legit_hospital_route(
     hospitalDescription: Optional[str] = Form(None),
     rate: Optional[float] = Form(5.0)  # Default rate is 5
 ):
-    hospital = await create_legit_hospital(name, address, phone, img, yearEstablished, specialties, region)
+    hospital = await create_legit_hospital(name, address, phone, img, yearEstablished, specialties, region, hospitalDescription,rate)
     if not hospital:
         raise HTTPException(status_code=400, detail="Không thể tạo bệnh viện")
     return hospital.model_dump(by_alias=True)
@@ -237,7 +237,7 @@ async def delete_check_process_route(process_id: str):
         raise HTTPException(status_code=404, detail="Quá trình kiểm tra da không tồn tại")
     return {"message": "Quá trình kiểm tra da đã được xóa thành công"}
 
-@router.get("/create-tag", response_model=TagModel, status_code=201)
+@router.post("/create-tag", response_model=TagModel, status_code=201)
 async def create_tag_route(
     name: str = Form(..., description="Tên của thẻ")
 ):

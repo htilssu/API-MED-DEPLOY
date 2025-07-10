@@ -36,14 +36,15 @@ async def submit_user_description_route(
 @router.post("/submit-differentiation-questions")
 async def submit_differentiation_route(
     key: str = Query(..., description="Key của kết quả đã lưu"),
-    user_answers:SubmitDifferentiationModel  = Body(..., description="Câu trả lời của người dùng cho câu hỏi phân biệt")
+    user_answers: dict = Body(..., description="Câu trả lời của người dùng cho câu hỏi phân biệt")
 ):
     """
     Gửi câu trả lời phân biệt từ người dùng để loại trừ nhãn không phù hợp.
     """
-    return await submit_differation_questions(user_answers=user_answers, key=key)
+    await submit_differation_questions(user_answers=user_answers, key=key)
+    return {"message": "Đã xử lý câu trả lời phân biệt thành công"}
     
-
+    
 @router.get("/knowledge")
 async def get_disease_knowledge(
     disease_name: str = Query(..., description="Tên bệnh cần tra cứu (tiếng Việt hoặc tiếng Anh)")

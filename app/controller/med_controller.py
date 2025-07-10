@@ -40,7 +40,7 @@ app = FastAPI()
 load_dotenv()
 login(token=os.getenv("HUGGINGFACE_TOKEN"))
 
-GCS_BUCKET = "test_storage_1000000image"
+GCS_BUCKET = "storage3000image"
 GCS_IMAGE_PATH = "uploaded_images/"
 GCS_KEY_PATH = storage.Client.from_service_account_json("app/iamkey.json")
 VECTOR_FILE = "static/processed/embedded_vectors.json"
@@ -451,6 +451,7 @@ def filter_incorrect_labels_by_user_description(description: str, labels: list[s
             "loai_bo": [{{"label": "nhãn không phù hợp", "ly_do": "...","similarity":""}}],
             "giu_lai": [{{"label": "nhãn phù hợp", "do_phu_hop": "cao/trung bình/thấp", "similarity":""}}]
         }}
+        Trả về kết quả dưới dạng JSON hợp lệ, không có Markdown hay ký tự thừa.
     """)
 
     try:
@@ -821,10 +822,12 @@ async def submit_differation_questions(user_answers:dict,key:str):
         final_labels = result.get("final_labels", "")
         print("\n--- Đang loại trừ nhãn không phù hợp ---")
         result_filter =filter_incorrect_labels_by_user_description(combined_description, final_labels)
+        print("Kết quả loại trừ nhãn:", result_filter)
         if not result_filter:
             print("Không có kết quả từ Gemini.")
             return
         refined_labels = result_filter.get("giu_lai", [])
+        print("Các nhãn được giữ lại:", refined_labels)
         if not refined_labels:
             print("Không còn nhãn nào phù hợp. Đề xuất tham khảo bác sĩ.")
         else:
@@ -833,7 +836,9 @@ async def submit_differation_questions(user_answers:dict,key:str):
         result_redis = []
         for label_info in refined_labels:
             label = label_info.get("label")
-            ket_qua = "-".join(label.split("-")[1:])
+            print(f"- Nhãn: {label}")
+            ket_qua = "-".join(label.split("-"))
+            print(f"- Kết quả: {ket_qua}")
             suitability = label_info.get("do_phu_hop")
             similarity= label_info.get("similarity", "")
             print(f"- {ket_qua} (Mức độ phù hợp: {suitability}) (Similarity: {similarity})")

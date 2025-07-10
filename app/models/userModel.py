@@ -11,6 +11,7 @@ class UserModel(BaseModel):
     phone: Optional[str] = None
     password: Optional[str] = None
     dateOfBirth: date
+    urlImage: Optional[str] = None  # Thêm trường urlImage nếu cần
 
     class Config:
         populate_by_name = True
@@ -23,12 +24,21 @@ class UserModel(BaseModel):
                 "email": "yourEmail@example.com",
                 "phone": "0123456789",
                 "password": "yourPassword",
-                "dateOfBirth": "2004-01-10"
+                "dateOfBirth": "2004-01-10",
+                "urlImage": "https://example.com/your_image.jpg"
             }
         }
 class TagModel(BaseModel):
-    id: Optional[str] = Field(alias="_id")
+    id: Optional[str] = Field(default=None, alias="_id")  # ✅ cho phép không có _id khi khởi tạo
     name: str
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "json_encoders": {
+            ObjectId: str
+        },
+        "populate_by_name": True
+    }
 
 #Model Thông tin chuẩn đoán
 class DiagnoseModel(BaseModel):
@@ -76,8 +86,8 @@ class Paper_Model(BaseModel):
     author: Optional[str] = None  # Tên tác giả (nếu có)
     authorImage: Optional[str] = None  # URL ảnh tác giả (nếu có)
     authorDescription: Optional[str] = None  # Mô tả tác giả (nếu có)
-    #tags:Là id của tag
-    tags: ObjectId = Field(default=None, alias="_id")  # Sử dụng ObjectId cho tags
+    #Liên kết với các tag
+    tags: List[str] = Field(default_factory=list)  # Danh sách ID của các tag liên quan
     class Config:
         json_encoders = {
             ObjectId: str  # Chuyển ObjectId thành str khi trả về JSON
@@ -105,7 +115,7 @@ class LegitHospitalModel(BaseModel):
     specialties: List[str]
     region: Optional[str] = None
     hospitalDescription: Optional[str] = None  # Mô tả bệnh viện (nếu có)
-    rate: Optional[float] = Field(default=5)
+    rate: Optional[float] = None # Đánh giá bệnh viện (nếu có)
 
     class Config:
         json_encoders = {
@@ -145,6 +155,7 @@ class CreateUserModel(BaseModel):
     phone: Optional[str] = Field(None, description="Số điện thoại người dùng")
     password: Optional[str] = Field(None, description="Mật khẩu người dùng")
     dateOfBirth: date = Field(..., description="Ngày sinh của người dùng")
+    urlImage: Optional[str] = Field(None, description="URL ảnh đại diện của người dùng")
 
 # Model lưu trữ thông tin chuẩn đoán (không cần _id)
 class CreateDiagnoseModel(BaseModel):
