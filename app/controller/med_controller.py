@@ -231,7 +231,6 @@ def load_faiss_index():
     if os.path.exists(LOCAL_LABELS_PATH):
         labels = np.load(LOCAL_LABELS_PATH, allow_pickle=True).item()
         print(f"Đã tải {len(labels)} nhãn bệnh từ labels.npy")
-        print(labels)
     else:
         print("labels.npy không tồn tại!")
 
