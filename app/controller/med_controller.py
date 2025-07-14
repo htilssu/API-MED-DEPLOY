@@ -40,7 +40,7 @@ app = FastAPI()
 load_dotenv()
 login(token=os.getenv("HUGGINGFACE_TOKEN"))
 
-GCS_BUCKET = "storage3000image"
+GCS_BUCKET = "kltn-huflit"
 GCS_IMAGE_PATH = "uploaded_images/"
 GCS_KEY_PATH = storage.Client.from_service_account_json("app/iamkey.json")
 VECTOR_FILE = "static/processed/embedded_vectors.json"
@@ -122,11 +122,7 @@ def extract_disease_named(results: list) -> list:
             print(f"Lỗi khi xử lý item {item}: {e}")
     return simplified
 
-# Ví dụ sử dụng
-input_data = {
-    'label': 'NON-INFECTIOUS DISEASES/PIGMENTARY DISORDERS/Vitiligo',
-    'cosine_similarity': 55.540950775146484
-}
+
 
     
 def extract_disease_name_and_similarity(label_str: str) -> Dict[str, float]:
