@@ -1,10 +1,10 @@
-from app.controller.diagnose_controller import (create_diagnosis, get_diagnosis, get_user_diagnoses, delete_diagnosis)
+from app.controller.diagnose import (create_diagnosis, get_diagnosis, get_user_diagnoses, delete_diagnosis)
 from fastapi import APIRouter, UploadFile, File, Query, Body, Form, HTTPException
 from typing import List, Optional
 from fastapi.responses import JSONResponse
 from app.config.cloudinary_config import cloudinary
 
-from app.models.diagnoiseModel import CreateDiagnoseModel, DiagnoseModel
+from app.models.diagnoise import CreateDiagnoseModel, DiagnoseModel
 
 router = APIRouter()
 

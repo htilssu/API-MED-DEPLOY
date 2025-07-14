@@ -2,6 +2,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from bson import ObjectId
 from datetime import datetime
+from typing import List, Optional
 
 #Model cho tạo bài báo 
 class CreateNewsModel(BaseModel):

@@ -1,4 +1,4 @@
-from app.models.checkprocessModel import CheckProcessModel
+from app.models.checkprocess import CheckProcessModel
 from fastapi import APIRouter, UploadFile as Upload, File, HTTPException
 from app.db.mongo import db
 from bson import ObjectId

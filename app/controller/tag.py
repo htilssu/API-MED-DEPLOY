@@ -1,4 +1,4 @@
-from app.models.tagModel import TagModel
+from app.models.tag import TagModel
 from fastapi import APIRouter, UploadFile as Upload, File, HTTPException
 from app.db.mongo import db
 from bson import ObjectId

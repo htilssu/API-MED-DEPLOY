@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException,status
 from typing import List
-from app.controller.auth_controller import get_all_users, get_user, create_user, login_user,update_user,delete_user,forgot_password,reset_password
-from app.models.userModel import CreateUserModel, LoginModel,UserModel
+from app.controller.auth import get_all_users, get_user, create_user, login_user,update_user,delete_user,forgot_password,reset_password
+from app.models.user import CreateUserModel, LoginModel,UserModel
 from app.config.cloudinary_config import cloudinary
 from fastapi import UploadFile as Upload, File, Form
 from io import BytesIO

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException,status
-from app.controller.location_controller import search_pharmacies,get_hospital_from_coordinates
+from app.controller.location import search_pharmacies,get_hospital_from_coordinates
 # from app.models.userModel import Location
 
 router = APIRouter() 

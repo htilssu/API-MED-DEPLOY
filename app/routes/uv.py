@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 import os
 from fastapi import APIRouter, Request, Response
-from app.controller.uv_controller import (check_and_warn_uv)
+from app.controller.uv import (check_and_warn_uv)
 
 router = APIRouter()
 

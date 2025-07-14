@@ -1,8 +1,8 @@
-from app.controller.paper_controller import create_paper, get_paper_by_id, get_all_papers, update_paper, delete_paper, get_papers_by_tag,search_papers
+from app.controller.paper import create_paper, get_paper_by_id, get_all_papers, update_paper, delete_paper, get_papers_by_tag,search_papers
 from fastapi import APIRouter, UploadFile, File, Query, Body, Form, HTTPException
 from typing import List, Optional
 from fastapi.responses import JSONResponse
-from app.models.paperModel import Paper_Model
+from app.models.paper import Paper_Model
 
 
 router = APIRouter()

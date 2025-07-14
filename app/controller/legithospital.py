@@ -1,4 +1,4 @@
-from app.models.legithospitalModel import LegitHospitalModel
+from app.models.legithospital import LegitHospitalModel
 from fastapi import APIRouter, UploadFile as Upload, File, HTTPException
 from app.db.mongo import db
 from bson import ObjectId

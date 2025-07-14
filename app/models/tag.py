@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from bson import ObjectId
 
 class TagModel(BaseModel):
-    id: Optional[str] = Field(default=None, alias="_id")  # ✅ cho phép không có _id khi khởi tạo
+    id: Optional[str] = Field(default=None, alias="_id")  
     name: str
 
     model_config = {
