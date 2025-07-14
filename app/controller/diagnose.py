@@ -1,4 +1,4 @@
-from app.models.diagnoiseModel import DiagnoseModel
+from app.models.diagnoise import DiagnoseModel
 from fastapi import APIRouter, UploadFile as Upload, File, HTTPException
 from app.db.mongo import db
 from bson import ObjectId

@@ -1,4 +1,4 @@
-from app.models.userModel import UserModel, LoginModel
+from app.models.user import UserModel, LoginModel
 from app.db.mongo import db
 from bson import ObjectId
 from datetime import datetime, timedelta

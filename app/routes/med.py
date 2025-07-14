@@ -1,10 +1,10 @@
 from fastapi import APIRouter, UploadFile, File,Query,Body,Form, HTTPException
-from app.controller.med_controller import start_diagnois,get_diagnosis_result,get_differentiation_questions,submit_differation_questions,knowledge,submit_user_description,get_final_result,generate_disease_name
+from app.controller.med import start_diagnois,get_diagnosis_result,get_differentiation_questions,submit_differation_questions,knowledge,submit_user_description,get_final_result,generate_disease_name
 from fastapi.responses import JSONResponse
 # from app.models.userModel import PostUserDescriptionModel
 router = APIRouter()
 
-from app.models.userModel import PostUserDescriptionModel,SubmitDifferentiationModel
+from app.models.user import PostUserDescriptionModel,SubmitDifferentiationModel
 
 @router.post("/start-diagnosis")
 async def start_diagnosis_route(

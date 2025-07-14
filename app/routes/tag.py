@@ -1,8 +1,8 @@
-from app.controller.tag_controller import create_tag, get_all_tags, get_tag_by_id
+from app.controller.tag import create_tag, get_all_tags, get_tag_by_id
 from fastapi import APIRouter, UploadFile, File, Query, Body, Form, HTTPException
 from typing import List, Optional
 from fastapi.responses import JSONResponse
-from app.models.tagModel import TagModel
+from app.models.tag import TagModel
 router = APIRouter()
 
 

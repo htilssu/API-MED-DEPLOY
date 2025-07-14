@@ -1,11 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, Query, Body, Form, HTTPException
 from typing import List, Optional
 from fastapi.responses import JSONResponse
-from app.controller.legithospital_controller import (create_legit_hospital, get_all_legit_hospitals, get_legit_hospital_by_id,
+from app.controller.legithospital import (create_legit_hospital, get_all_legit_hospitals, get_legit_hospital_by_id,
     update_legit_hospital, delete_legit_hospital, get_hospitals_by_specialty, add_specialty_to_hospital,
     remove_specialty_from_hospital)
 
-from app.models.legithospitalModel import LegitHospitalModel
+from app.models.legithospital import LegitHospitalModel
 
 router = APIRouter()
 

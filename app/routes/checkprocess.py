@@ -1,8 +1,8 @@
-from app.controller.checkprocess_controller import create_check_process, get_check_process_by_user, get_check_process_by_id,track_check_process,delete_check_process
+from app.controller.checkprocess import create_check_process, get_check_process_by_user, get_check_process_by_id,track_check_process,delete_check_process
 from fastapi import APIRouter, UploadFile, File, Query, Body, Form, HTTPException
 from typing import List, Optional
 from fastapi.responses import JSONResponse
-from app.models.checkprocessModel import CheckProcessModel
+from app.models.checkprocess import CheckProcessModel
 
 router = APIRouter()
 
