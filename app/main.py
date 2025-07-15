@@ -28,15 +28,15 @@ async def read_root():
 async def health_check():
     return {"status": "OK"}
 
-app.include_router(med.router, prefix="/med")
-app.include_router(auth.router, prefix="/auth")
-app.include_router(uv.router, prefix="/uv")
-app.include_router(diagnose.router, prefix="/diagnose")
-app.include_router(checkprocess.router, prefix="/check-process")
-app.include_router(legithostpital.router, prefix="/legit-hospital")
-app.include_router(location.router, prefix="/location")
-app.include_router(paper.router, prefix="/paper")
-app.include_router(tag.router, prefix="/tag")
+app.include_router(med.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(uv.router, prefix="/api")
+app.include_router(diagnose.router, prefix="/api")
+app.include_router(checkprocess.router, prefix="/api")
+app.include_router(legithostpital.router, prefix="/api")
+app.include_router(location.router, prefix="/api")
+app.include_router(paper.router, prefix="/api")
+app.include_router(tag.router, prefix="/api")
 
 
 if __name__ == "__main__":

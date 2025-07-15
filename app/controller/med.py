@@ -21,7 +21,7 @@ import re
 from sklearn.metrics.pairwise import cosine_similarity
 import requests
 import xml.etree.ElementTree as ET
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from io import BytesIO
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
@@ -30,322 +30,139 @@ from app.redis_client import redis_client, save_result_to_redis,get_result_by_ke
 import hashlib
 from app.db.mongo import db
 from geopy.geocoders import Nominatim
+import time
+import io
+user_collection = db["user"]
+
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+login(token=os.getenv("HUGGINGFACE_TOKEN"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
 
 app = FastAPI()
 
 load_dotenv()
-login(token=os.getenv("HUGGINGFACE_TOKEN"))
 
-GCS_BUCKET = "kltn-huflit"
-GCS_IMAGE_PATH = "uploaded_images/"
-GCS_KEY_PATH = storage.Client.from_service_account_json("app/iamkey.json")
-VECTOR_FILE = "static/processed/embedded_vectors.json"
+# ---------------------- CONSTANTS ----------------------
+PROCESSED_DIR = "app/static/processed"
+ANOMALY_MAP_DIR = "app/static/anomaly_maps"
+ROI_OUTPUT_DIR = "app/static/roi_outputs"
+GCS_BUCKET = "group_dataset-nt"
 GCS_FOLDER = "handle_data"
+LOCAL_SAVE_DIR = "app/static/"
+LOCAL_DATASET_PATH = "app/static/json/dataset.json"
 GCS_DATASET = f"dataset"
 GCS_DATASET_PATH = f"{GCS_DATASET}/dataset.json"
-GCS_INDEX_PATH = f"{GCS_FOLDER}/faiss_index.bin"
-GCS_LABELS_PATH = f"{GCS_FOLDER}/labels.npy"
-GCS_ANOMALY_INDEX_PATH = f"{GCS_FOLDER}/faiss_index_anomaly.bin"
-GCS_ANOMALY_LABELS_PATH = f"{GCS_FOLDER}/labels_anomaly.npy"
-LOCAL_INDEX_PATH = "app/static/faiss/faiss_index.bin"
-LOCAL_LABELS_PATH = "app/static/labels/labels.npy"
-LOCAL_ANOMALY_INDEX_PATH = "app/static/faiss/faiss_index_anomaly.bin"
-LOCAL_ANOMALY_LABELS_PATH = "app/static/labels/labels_anomaly.npy"
-LOCAL_DATASET_PATH = "app/static/json/dataset.json"
-INDEX_DIM = 512
+GCS_KEY_PATH = storage.Client.from_service_account_json("app/iamkey.json")
+REQUIRED_FILES = [
+    "faiss_index.bin",
+    "faiss_index_anomaly.bin",
+    
+    "faiss_index_bacterial_infections.bin",
+    "faiss_index_fungal_infections.bin",
+    "faiss_index_parasitic_infections.bin",
+    "faiss_index_virus.bin",
+    
+    "faiss_index_anomaly_bacterial_infections.bin",
+    "faiss_index_anomaly_fungal_infections.bin",
+    "faiss_index_anomaly_parasitic_infections.bin",
+    "faiss_index_anomaly_virus.bin",
 
-index = None
-labels = []
-anomaly_index = None
-anomaly_labels = []
+    "labels.npy",
+    "labels_anomaly.npy",
+
+    "labels_bacterial_infections.npy",
+    "labels_fungal_infections.npy",
+    "labels_parasitic_infections.npy",
+    "labels_virus.npy",
+
+    "labels_anomaly_bacterial_infections.npy",
+    "labels_anomaly_fungal_infections.npy",
+    "labels_anomaly_parasitic_infections.npy",
+    "labels_anomaly_virus.npy"
+]
+
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
 vit_model = timm.create_model("vit_base_patch16_224", pretrained=True).to(device)
 vit_model.eval()
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-users_collection = db["users"]
 
-def download_from_gcs():
-    storage_client = GCS_KEY_PATH
-    bucket = storage_client.bucket(GCS_BUCKET)
-    files_to_download = [
-        (GCS_INDEX_PATH, LOCAL_INDEX_PATH),
-        (GCS_LABELS_PATH, LOCAL_LABELS_PATH),
-        (GCS_ANOMALY_INDEX_PATH, LOCAL_ANOMALY_INDEX_PATH),
-        (GCS_ANOMALY_LABELS_PATH, LOCAL_ANOMALY_LABELS_PATH),
-        (GCS_DATASET_PATH, LOCAL_DATASET_PATH),
-    ]
-    for gcs_path, local_path in files_to_download:
-        blob = bucket.blob(gcs_path)
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        blob.download_to_filename(local_path)
-        logger.info(f"Tải về {gcs_path} to {local_path}")
 
-def upload_to_gcs(local_path: str, destination_blob_name: str):
-    client = storage.Client.from_service_account_json("app/iamkey.json")
-    bucket = client.bucket(GCS_BUCKET)
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(local_path)
-    logger.info(f"Đã upload {local_path} lên GCS tại: gs://{GCS_BUCKET}/{destination_blob_name}")
 
-def preprocess_image(image_data: bytes) -> Optional[np.ndarray]:
-    try:
-        nparr = np.frombuffer(image_data, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            return None
-        blurred = cv2.GaussianBlur(img, (5, 5), 0)
-        equalized = cv2.equalizeHist(blurred)
-        edges = cv2.Canny(equalized, 50, 150)
-        return edges
-    except Exception as e:
-        logger.error(f"Lỗi xử lý ảnh: {e}")
-        return None
 
-def extract_disease_named(results: list) -> list:
-    simplified = []
-    for item in results:
-        try:
-            label = item['label'].split('/')[-1]
-            simplified.append({
-                'label': label,
-                'cosine_similarity': item['cosine_similarity']
-            })
-        except Exception as e:
-            print(f"Lỗi khi xử lý item {item}: {e}")
-    return simplified
+
 
 
 
     
-def extract_disease_name_and_similarity(label_str: str) -> Dict[str, float]:
-    prompt = f"""Đây là một chuỗi nhãn bệnh lý: "{label_str}". Bạn hãy lọc dữ liệu giúp tôi bao gồm tên nhãn bệnh và 
-    similarity của nó ví dụ 'label': 'NON-INFECTIOUS DISEASES/PIGMENTARY DISORDERS/Vitiligo', 'cosine_similarity': 55.540950775146484
-    Thì bạn sẽ trả về kết quả là "{'label': 'Vitiligo', 'cosine_similarity': 55.540950775146484}".
-    Nếu không có tên bệnh lý nào, hãy trả về "unknown" cho label và 0.0 cho similarity.
-    Trả về kết quả dưới dạng JSON hợp lệ, không có Markdown hay ký tự thừa.
-    """
+# ---------------------- GOOGLE CLOUD CLIENT (DÙNG JSON) ----------------------
+def get_gcs_client():
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        # Xử lý kết quả trả về
-        if text.lower() == "unknown":
-            return {"label": "unknown", "cosine_similarity": 0.0}
-        # Loại bỏ dấu ngoặc kép và ký tự thừa
-        text = re.sub(r'^\{|\}$', '', text).strip()
-        # Chuyển đổi chuỗi thành dict
-        result = json.loads(text)
-        # Kiểm tra và chuẩn hóa kết quả
-        if "label" not in result or "cosine_similarity" not in result:
-            raise ValueError("Kết quả không hợp lệ, thiếu trường 'label' hoặc 'cosine_similarity'")
-        # Chuyển đổi similarity về float
-        result["cosine_similarity"] = float(result["cosine_similarity"])
-        # Trả về kết quả
-        return result
+        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        return storage.Client.from_service_account_json(credentials_path)
     except Exception as e:
-        print(f"Lỗi khi trích xuất tên bệnh và similarity từ '{label_str}': {e}")
-        return "Không thể trích xuất tên bệnh"
+        logging.error(f"Lỗi tạo Google Cloud Client: {e}")
+        raise
 
-def embed_image(image_data: bytes):
-    try:
-        image = Image.open(BytesIO(image_data)).convert("RGB")
-        inputs = processor(images=image, return_tensors="pt").to(device)
-        with torch.no_grad():
-            embedding = model.get_image_features(**inputs)
-        return embedding.cpu().numpy().astype(np.float32)
-    except Exception as e:
-        logger.error(f"Lỗi nhúng ảnh: {e}")
-        return None
-
-def generate_anomaly_map(image_data: bytes) -> Optional[np.ndarray]:
-    try:
-        img = Image.open(BytesIO(image_data)).convert("RGB")
-        original_size = img.size
-        transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-        ])
-        img_tensor = transform(img).unsqueeze(0).to(device)
-        with torch.no_grad():
-            features = vit_model.forward_features(img_tensor)
-        feature_map = features.mean(dim=1).squeeze().cpu().numpy()
-        anomaly_map = (feature_map - np.min(feature_map)) / (np.ptp(feature_map) + 1e-6)
-        anomaly_map = (anomaly_map * 255).astype(np.uint8)
-        anomaly_map_resized = cv2.resize(anomaly_map, original_size, interpolation=cv2.INTER_CUBIC)
-        return anomaly_map_resized
-    except Exception as e:
-        logger.error(f"Lỗi tạo Anomaly Map: {e}")
-        return None
-
-def embed_anomaly_map(anomaly_map: np.ndarray):
-    try:
-        anomaly_map_rgb = cv2.cvtColor(anomaly_map, cv2.COLOR_GRAY2RGB)
-        image = Image.fromarray(anomaly_map_rgb)
-        inputs = processor(images=image, return_tensors="pt").to(device)
-        with torch.no_grad():
-            embedding = model.get_image_features(**inputs)
-        return embedding.cpu().numpy().astype(np.float32)
-    except Exception as e:
-        logger.error(f"Lỗi nhúng Anomaly Map: {e}")
-        return None
-
-def load_faiss_index():
-    """Tải FAISS Index và nhãn bệnh từ file."""
-    global index, labels,anomaly_index,anomaly_labels
-    if os.path.exists(LOCAL_INDEX_PATH):
+def download_gcs_file(bucket_name: str, source_blob_name: str, destination_file_name: str, retries: int = 5):
+    for attempt in range(1, retries + 1):
         try:
-            index = faiss.read_index(LOCAL_INDEX_PATH)
-            print(f"FAISS Index tải thành công! Tổng số vector: {index.ntotal}")
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(bucket_name)
+            blob = bucket.blob(source_blob_name)
+            blob.download_to_filename(destination_file_name, timeout=120)
+            logging.info(f"Tải thành công {source_blob_name} → {destination_file_name}")
+            return
         except Exception as e:
-            print(f"Lỗi tải FAISS Index: {e}")
-            index = None
-    else:
-        print("FAISS Index không tồn tại!")
-
-    if os.path.exists(LOCAL_ANOMALY_INDEX_PATH):
-        try:
-            anomaly_index = faiss.read_index(LOCAL_ANOMALY_INDEX_PATH)
-            print(f"FAISS Anomaly Index tải thành công! Tổng số vector: {anomaly_index.ntotal}")
-        except Exception as e:
-            print(f"Lỗi tải FAISS Anomaly Index: {e}")
-            anomaly_index = None
-    else:
-        print("FAISS Anomaly Index không tồn tại!")
-    if os.path.exists(LOCAL_ANOMALY_LABELS_PATH):
-        anomaly_labels = np.load(LOCAL_ANOMALY_LABELS_PATH, allow_pickle=True).tolist()
-        print(f"Đã tải {len(anomaly_labels)} nhãn bệnh từ labels-anomaly.npy")
-    else:
-        print("labels-anomaly.npy không tồn tại!")
-    if os.path.exists(LOCAL_LABELS_PATH):
-        labels = np.load(LOCAL_LABELS_PATH, allow_pickle=True).item()
-        print(f"Đã tải {len(labels)} nhãn bệnh từ labels.npy")
-    else:
-        print("labels.npy không tồn tại!")
-
-
-def search_similar_images(query_vector, top_k=5):
-    if index is None or index.ntotal == 0:
-        logger.warning("FAISS index trống!")
-        return []
-    if index.ntotal != len(labels):
-        logger.warning(f"Số vector ({index.ntotal}) không khớp với nhãn ({len(labels)}). Kết quả có thể không chính xác!")
-    try:
-        if query_vector.ndim == 1:
-            query_vector = np.expand_dims(query_vector, axis=0)
-        faiss.normalize_L2(query_vector)
-
-        distances, indices = index.search(query_vector, top_k)
-        logger.info(f"Chỉ số tìm thấy: {indices}")
-        logger.info(f"Cosine similarities: {distances}")
-
-        similar_results = []
-        labels_keys = list(labels.keys()) if labels else []
-        for idx, sim in zip(indices[0], distances[0]):
-            logger.debug(f"Xử lý idx: {idx}, similarity: {sim}")
-            if sim < 55:  # Ngưỡng lọc, điều chỉnh nếu cần
-                continue
-            if 0 <= idx < len(labels_keys):
-                label_filename = labels_keys[idx]
-                label = labels.get(label_filename, "unknown")
+            logging.warning(f"Lỗi tải {source_blob_name} (lần {attempt}/{retries}): {e}")
+            if attempt < retries:
+                wait_time = 5 * attempt
+                logging.info(f"Đợi {wait_time}s trước lần thử lại...")
+                time.sleep(wait_time)
             else:
-                logger.warning(f"Index {idx} vượt phạm vi labels ({len(labels_keys)})!")
-                continue  # Bỏ qua nếu chỉ số không hợp lệ
-            similar_results.append({
-                "label": label,
-                "cosine_similarity": float(sim)
-            })
-        # for result in similar_results:
-        #     print(f"Label: {result['label']}, Cosine Similarity: {result['cosine_similarity']:.4f}")
-        return similar_results
-    except Exception as e:
-        logger.error(f"Lỗi tìm kiếm ảnh tương tự: {e}")
-        return []
+                logging.error(f"Thất bại sau {retries} lần: {source_blob_name}")
 
-def search_anomaly_images(query_vector, top_k=5):
-    if anomaly_index is None or anomaly_index.ntotal == 0:
-        logger.warning("FAISS Anomaly Index trống!")
-        return []
-    if anomaly_index.ntotal != len(anomaly_labels):
-        logger.warning(f"Số vector ({anomaly_index.ntotal}) không khớp với nhãn bất thường ({len(anomaly_labels)}). Kết quả có thể không chính xác!")
-    try:
-        if query_vector.ndim == 1:
-            query_vector = np.expand_dims(query_vector, axis=0)
-        faiss.normalize_L2(query_vector)
+def download_all_required_files():
+    Path(LOCAL_SAVE_DIR).mkdir(parents=True, exist_ok=True)
+    for file in REQUIRED_FILES:
+        gcs_path = f"{GCS_FOLDER}/{file}"
+        local_path = os.path.join(LOCAL_SAVE_DIR, file)
+        download_gcs_file(GCS_BUCKET, gcs_path, local_path)
 
-        distances, indices = anomaly_index.search(query_vector, top_k)
-        logger.info(f"Chỉ số tìm thấy (anomaly): {indices}")
-        logger.info(f"Cosine similarities (anomaly): {distances}")
+# ---------------------- BƯỚC 1: NHẬN ẢNH ----------------------
+def receive_image_from_path(image_path: str) -> Image.Image:
+    image = cv2.imread(image_path)
+    if image is None:
+        raise ValueError(f"Không thể đọc ảnh tại: {image_path}")
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    return Image.fromarray(image_rgb)
 
-        similar_results = []
-        anomaly_labels_keys = list(anomaly_labels.keys()) if anomaly_labels else []
-        for idx, sim in zip(indices[0], distances[0]):
-            logger.debug(f"Xử lý idx (anomaly): {idx}, similarity: {sim}")
-            if sim < 55:  # Ngưỡng lọc, điều chỉnh nếu cần
-                continue
-            if 0 <= idx < len(anomaly_labels_keys):
-                label_filename = anomaly_labels_keys[idx]
-                label = anomaly_labels.get(label_filename, "unknown")
-            else:
-                logger.warning(f"Index {idx} vượt phạm vi labels_anomaly ({len(anomaly_labels_keys)})!")
-                continue  # Bỏ qua nếu chỉ số không hợp lệ
-            similar_results.append({
-                "label": label,
-                "cosine_similarity": float(sim)
-            })
-              # for result in similar_results:
-        #     print(f"Label: {result['label']}, Cosine Similarity: {result['cosine_similarity']:.4f}")
-        return similar_results
-    except Exception as e:
-        logger.error(f"Lỗi tìm kiếm ảnh anomaly: {e}")
-        return []
+# ---------------------- BƯỚC 2: TIỀN XỬ LÝ ẢNH ----------------------
+def apply_clahe(image):
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    h, s, v = cv2.split(hsv)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    v_clahe = clahe.apply(v)
+    hsv_clahe = cv2.merge((h, s, v_clahe))
+    return cv2.cvtColor(hsv_clahe, cv2.COLOR_HSV2RGB)
 
-def combine_labels(detailed_labels_normal: List[Dict], detailed_labels_anomaly: List[Dict]) -> str:
-    """
-    Kết hợp nhãn từ detailed_labels_normal và detailed_labels_anomaly, loại bỏ trùng lặp và nhãn có similarity < 0.8.
-    Args:
-        detailed_labels_normal: Danh sách dict chứa label và cosine_similarity từ ảnh gốc.
-        detailed_labels_anomaly: Danh sách dict chứa label và cosine_similarity từ anomaly map.
-    Returns:
-        Chuỗi các nhãn được kết hợp, sắp xếp theo cosine_similarity giảm dần.
-    """
-    # Kết hợp tất cả nhãn từ cả hai nguồn
-    all_labels = detailed_labels_normal + detailed_labels_anomaly
-    
-    # Chuẩn hóa và lọc nhãn
-    filtered_labels = []
-    seen_labels = {}  # Lưu nhãn và similarity cao nhất
-    for item in all_labels:
-        label = item["label"]
-        sim = item["cosine_similarity"]
-        # Chuẩn hóa similarity nếu ở thang 0-100
-        normalized_sim = sim / 100.0 if sim > 1.0 else sim
-        if normalized_sim < 0.5:  # Loại bỏ nhãn có similarity < 0.8
-            continue
-        # Giữ nhãn có similarity cao nhất nếu trùng lặp
-        if label not in seen_labels or normalized_sim > seen_labels[label]:
-            seen_labels[label] = normalized_sim
-    
-    # Tạo danh sách nhãn đã lọc và sắp xếp theo similarity giảm dần
-    filtered_labels = [
-        {"label": label, "cosine_similarity": sim}
-        for label, sim in seen_labels.items()
-    ]
-    filtered_labels.sort(key=lambda x: x["cosine_similarity"], reverse=True)
-    
-    # Tạo chuỗi nhãn
-    final_labels = " ".join(item["label"] for item in filtered_labels).strip()
-    
-    logger.info(f"Nhãn tổng hợp sau lọc và sắp xếp: {final_labels}")
-    return final_labels
+def preprocess_image(image_data: bytes) -> Tuple[Image.Image, np.ndarray]:
+    nparr = np.frombuffer(image_data, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError(f"Không thể đọc ảnh từ dữ liệu bytes")
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = apply_clahe(image)
+    image = cv2.GaussianBlur(image, (3, 3), 0)
+    return Image.fromarray(image), image
 
+# ---------------------- BƯỚC 3: SINH MÔ TẢ BẰNG GEMINI ----------------------
 def generate_description_with_Gemini(image_data: bytes):
     try:
         img = Image.open(BytesIO(image_data))
@@ -363,161 +180,536 @@ def generate_description_with_Gemini(image_data: bytes):
         - Phân bố (rải rác, tập trung thành đám, theo đường…)
         - Các đặc điểm bất thường khác nếu có (chảy máu, vảy, mụn nước, sưng nề…)
         Chỉ mô tả những gì có thể nhìn thấy trong ảnh, không đưa ra giả định hay chẩn đoán y khoa.
-        Xóa mark down và các ký tự đặc biệt trong kết quả.
+        Xóa markdown và các ký tự đặc biệt trong kết quả.
         """
         response = model.generate_content([prompt, img])
-        caption = response.text.replace("\n", " ")
-        logger.info("Tạo mô tả ảnh thành công với Gemini")
+        caption = response.text.replace("\n", " ").strip()
         return caption
     except Exception as e:
-        logger.error(f"Lỗi khi tạo caption với Gemini: {e}")
+        logging.error(f"Lỗi khi tạo caption với Gemini: {e}")
         return None
 
-def generate_medical_entities(image_caption, user_description):
-    combined_description = f"1. Mô tả từ người dùng: {user_description}. 2. Mô tả từ ảnh: {image_caption}."
-    print(combined_description)
-    logger.info(f"Combined description: {combined_description}")
-    prompt = textwrap.dedent(f"""
-        Tôi có 2 đoạn mô tả sau về một vùng da bị bất thường: {combined_description}
-        Hãy chuẩn hóa cả hai mô tả, loại bỏ từ dư thừa, hợp nhất lại, và trích xuất các đặc trưng y khoa quan trọng.
-        Mỗi đặc trưng nên được gắn nhãn thuộc một trong ba loại sau:
-        - "Triệu chứng": mô tả biểu hiện, dấu hiệu lâm sàng (ví dụ: phát ban, ngứa, đỏ, bong tróc…)
-        - "Vị trí xuất hiện": vùng cơ thể bị ảnh hưởng (ví dụ: mu bàn tay, cẳng chân, ngón tay…)
-        - "Nguyên nhân": yếu tố gây ra tình trạng đó nếu có xuất hiện trong mô tả (ví dụ: côn trùng cắn, dị ứng, tiếp xúc hóa chất…)
-        Trả về kết quả dạng JSON Array. Mỗi phần tử là một object gồm:
-        - "entity": cụm từ y khoa
-        - "type": "Triệu chứng", "Vị trí xuất hiện", hoặc "Nguyên nhân"
-        Ví dụ đầu ra:
-        [
-          {{ "entity": "vết đỏ", "type": "Triệu chứng" }},
-          {{ "entity": "cẳng chân", "type": "Vị trí xuất hiện" }},
-          {{ "entity": "dị ứng thời tiết", "type": "Nguyên nhân" }}
-        ]
-        Chỉ liệt kê các đặc trưng có trong mô tả. Không suy luận thêm.
-        - Trả về JSON thuần túy, không bao gồm Markdown (```json hoặc ```), không thêm ký tự thừa.
-        - Đảm bảo JSON hợp lệ và có thể phân tích trực tiếp.    
-    """)
+
+def generate_anomaly_overlay(image_pil):
+    image_resized = image_pil.resize((224, 224))
+    image_np = np.array(image_resized).astype(np.float32) / 255.0
+    image_np = (image_np - 0.5) / 0.5
+    image_tensor = torch.tensor(image_np.transpose(2, 0, 1)).unsqueeze(0).float().to(device)
+
+    with torch.no_grad():
+        features = vit_model.forward_features(image_tensor)
+
+    anomaly_map = features[0].norm(dim=0).cpu().numpy()
+    anomaly_map = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min() + 1e-8)
+    anomaly_map = (anomaly_map * 255).astype(np.uint8)
+
+    anomaly_map_resized = cv2.resize(anomaly_map, image_pil.size[::-1])
+    anomaly_map_blur = cv2.GaussianBlur(anomaly_map_resized, (5, 5), 0)
+    heatmap = cv2.applyColorMap(anomaly_map_blur, cv2.COLORMAP_JET)
+
+    image_cv = np.array(image_pil)
+    if heatmap.shape[:2] != image_cv.shape[:2]:
+        heatmap = cv2.resize(heatmap, (image_cv.shape[1], image_cv.shape[0]))
+
+    if image_cv.shape[2] == 3:
+        original = cv2.cvtColor(image_cv, cv2.COLOR_RGB2BGR)
+    else:
+        original = image_cv
+
+    overlay = cv2.addWeighted(original, 0.6, heatmap, 0.4, 0)
+    return overlay, anomaly_map_blur
+# ---------------------- PHÂN LOẠI ẢNH THƯỜNG (FULL IMAGE) ----------------------
+def embed_image_clip(image_pil: Image.Image) -> np.ndarray:
+   
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content([prompt])
-        text = response.text.strip()
-        clean_text = re.sub(r"```(?:json)?|```", "", text).strip()
-        result = json.loads(clean_text)
-        decoded_result = json.dumps(result, ensure_ascii=False)
-        return decoded_result 
-
-    except Exception as e:
-        print(f"Lỗi khi tạo mô tả với Gemini: {e}")
-        return None
-
-def compare_descriptions_and_labels(description: str, labels: str):
-    prompt = textwrap.dedent(f"""
-        Mô tả: "{description}"
-        Nhãn: "{labels}"
-        So sánh sự khác biệt giữa mô tả và nhãn bệnh. Sau đó, tạo ra 3 câu hỏi giúp phân biệt chính xác hơn.
-        Trả về kết quả theo định dạng:
-        1. ...
-        2. ...
-        3. ...
-    """)
-    try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content([prompt])
-        text = response.text.strip()
-        questions = re.findall(r"\d+\.\s+(.*)", text)
-        logger.info("Tạo câu hỏi phân biệt thành công")
-        return questions
-    except Exception as e:
-        logger.error(f"Lỗi khi gọi Gemini: {e}")
-        return []
-
-def filter_incorrect_labels_by_user_description(description: str, labels: list[str]) -> str:
-    prompt = textwrap.dedent(f"""
-        Mô tả bệnh của người dùng: "{description}"
-        Danh sách các nhãn bệnh nghi ngờ: [{labels}]
-
-        Nhiệm vụ:
-        1. Phân tích mô tả và so sánh với từng nhãn bệnh.
-        2. Loại bỏ các nhãn bệnh không phù hợp với mô tả. Giải thích lý do loại bỏ rõ ràng.
-        3. Giữ lại các nhãn phù hợp nhất, sắp xếp theo mức độ phù hợp giảm dần.
-        4. Trả thêm similarity của từng nhãn bệnh 
-        Kết quả đầu ra phải ở định dạng JSON:
-        {{
-            "loai_bo": [{{"label": "nhãn không phù hợp", "ly_do": "...","similarity":""}}],
-            "giu_lai": [{{"label": "nhãn phù hợp", "do_phu_hop": "cao/trung bình/thấp", "similarity":""}}]
-        }}
-        Trả về kết quả dưới dạng JSON hợp lệ, không có Markdown hay ký tự thừa.
-    """)
-
-    try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content([prompt])
-        text = response.text.strip()
-        clean_text = re.sub(r"```(?:json)?|```", "", text).strip()
-        result = json.loads(clean_text)
-        return result 
-
-    except Exception as e:
-        print(f"Lỗi khi tạo mô tả với Gemini: {e}")
-        return None
-
-def search_disease_in_json(file_path: str, disease_name: str) -> List[Dict]:
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        if not isinstance(data, list):
-            logger.warning("File JSON không phải là danh sách.")
-            return []
-        results = [
-            entry for entry in data
-            if isinstance(entry, dict) and disease_name.lower() in entry.get("Tên bệnh", "").lower()
-        ]
-        logger.info(f"Tìm thấy {len(results)} kết quả trong JSON cho bệnh: {disease_name}")
-        return results
-    except Exception as e:
-        logger.error(f"Lỗi tìm kiếm trong JSON: {e}")
-        return []
+        # Ensure image is in RGB format
+        if image_pil.mode != "RGB":
+            image_pil = image_pil.convert("RGB")
+        
+        # Process image for CLIP model
+        inputs = processor(images=image_pil, return_tensors="pt").to(device)
+        with torch.no_grad():
+            outputs = model.get_image_features(**inputs)
+        
+        # Convert outputs to NumPy array
+        image_embedding = outputs.cpu().numpy().astype("float32")
+        return image_embedding
     
-def append_disease_to_json(file_path: str, new_disease: dict):
-    with open(file_path, 'r+', encoding='utf-8') as f:
-        try:
-            data = json.load(f)
-        except json.JSONDecodeError:
-            data = []
-        data.append(new_disease)
-        f.seek(0)
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.truncate()
-    print(f"Added new disease: {new_disease.get('name', '')}")
+    except Exception as e:
+        raise ValueError(f"Không thể xử lý ảnh: {str(e)}")
 
-def upload_json_to_gcs(bucket_name: str, destination_blob_name: str, source_file_name: str):
-    client = storage.Client.from_service_account_json("app/iamkey            .json")
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(source_file_name)
-    print(f"Uploaded {source_file_name} to {destination_blob_name}.")
+def search_faiss_index(embedding: np.ndarray, index_path: str, label_path: str, top_k: int = 5):
+    index = faiss.read_index(index_path)
+    labels = np.load(label_path, allow_pickle=True)
+    distances, indices = index.search(embedding, top_k)
+    top_labels = [labels[idx] for idx in indices[0]]
+    return list(zip(top_labels, distances[0]))
+
+# ---------------------- PHÂN TÍCH BẤT THƯỜNG (ANOMALY PIPELINE) ----------------------
+def save_anomaly_outputs(anomaly_overlay, anomaly_map, image_path: str):
+    basename = Path(image_path).stem
+    roi_output_path = os.path.join(ROI_OUTPUT_DIR, f"{basename}_overlay.jpg")
+    anomaly_map_path = os.path.join(ANOMALY_MAP_DIR, f"{basename}_anomaly.jpg")
+
+    os.makedirs(ROI_OUTPUT_DIR, exist_ok=True)
+    os.makedirs(ANOMALY_MAP_DIR, exist_ok=True)
+
+    cv2.imwrite(roi_output_path, anomaly_overlay)
+    cv2.imwrite(anomaly_map_path, anomaly_map)
+
+    return roi_output_path, anomaly_map_path
+
+def embed_anomaly_heatmap(heatmap_path: str) -> np.ndarray:
+    image = Image.open(heatmap_path).convert("RGB")
+    return embed_image_clip(image)
+
+def search_faiss_anomaly_index(embedding: np.ndarray, index_path: str, label_path: str, top_k: int = 5):
+    return search_faiss_index(embedding, index_path, label_path, top_k)
+def normalize_group_name(group_name: str) -> str:
+    """
+    Chuẩn hoá tên nhóm bệnh:
+    - Chuyển thành chữ thường
+    - Xoá khoảng trắng dư thừa
+    - Thay khoảng trắng bằng dấu gạch dưới
+    - Loại bỏ ký tự đặc biệt nếu cần (nếu tên nhóm có dấu chấm, dấu ngoặc,...)
+
+    Ví dụ: 'Fungal infections' → 'fungal_infections'
+    """
+    group_name = group_name.lower()
+    group_name = group_name.strip()
+    group_name = re.sub(r"\s+", "_", group_name)         
+    group_name = re.sub(r"[^a-z0-9_]", "", group_name)     
+    return group_name
+
+def aggregate_combined_results(combined_results):
+    score_dict = {}
+    for label, distance in combined_results:
+        sim = 1 / (1 + distance)
+        score_dict[label] = score_dict.get(label, 0) + sim
+
+    total_score = sum(score_dict.values())
+    normalized_scores = {label: (score / total_score) * 100 for label, score in score_dict.items()}
+    sorted_scores = sorted(normalized_scores.items(), key=lambda x: x[1], reverse=True)
+    return sorted_scores
+
+
+def generate_discriminative_questions(caption: str, labels: list[str], model=None) -> list[str]:
+    if model is None:
+        model = genai.GenerativeModel("gemini-2.5-pro")
+
+    prompt = f"""
+Bạn là bác sĩ da liễu. Tôi có ảnh da liễu với mô tả sau:
+
+--- MÔ TẢ ẢNH ---
+{caption}
+
+Tôi đang phân vân giữa các bệnh sau: {', '.join(labels)}.
+
+Hãy đưa ra 3 câu hỏi phân biệt giúp xác định đúng bệnh.  
+- Câu hỏi cần dễ hiểu, trực tiếp, liên quan đến triệu chứng đặc trưng.  
+- **Xưng hô trung lập, dùng “bạn” để hỏi.**  
+- Không được dùng từ như "bé", "em bé", "bệnh nhân", "anh/chị", "người bệnh", v.v.
+
+Chỉ cần liệt kê 3 câu hỏi bằng tiếng Việt, không giải thích thêm.
+"""
+    try:
+        response = model.generate_content(prompt)
+        raw_text = response.text.strip()
+        questions = [q.strip(" -0123456789.") for q in raw_text.split("\n") if q.strip()]
+        return questions[:3]
+    except Exception as e:
+        logging.error(f"Lỗi sinh câu hỏi phân biệt: {e}")
+        return []
+def select_final_diagnosis_with_llm(
+    caption: str,
+    labels: list[str],
+    questions: list[str],
+    answers: list[str],
+    model=None
+) -> str:
+    if model is None:
+        model = genai.GenerativeModel("gemini-2.5-pro")
+
+    qa_text = "\n".join(
+        [f"- {q}\n  → {a}" for q, a in zip(questions, answers)]
+    )
+
+    prompt = f"""
+Bạn là bác sĩ da liễu. Dưới đây là mô tả ảnh tổn thương da, danh sách bệnh nghi ngờ và các thông tin phân biệt thu được từ người bệnh.
+
+--- MÔ TẢ ẢNH ---
+{caption}
+
+--- CÁC BỆNH NGHI NGỜ ---
+{', '.join(labels)}
+
+--- CÂU TRẢ LỜI PHÂN BIỆT ---
+{qa_text}
+
+Dựa vào tất cả thông tin trên, hãy chọn ra bệnh hợp lý nhất từ danh sách bệnh nghi ngờ.  
+**Chỉ trả lời tên bệnh chính xác duy nhất (không giải thích thêm).**
+"""
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip().split("\n")[0]
+    except Exception as e:
+        logging.error(f"Lỗi chọn nhãn cuối bằng Gemini: {e}")
+        return ""
+
+def detailed_group_analysis(image_vector: np.ndarray, anomaly_vector: np.ndarray, group_name: str, top_k: int = 5):
+    print(f"\nSo sánh trong nhóm bệnh: {group_name}")
+    index_path_full = os.path.join(LOCAL_SAVE_DIR, f"faiss_index_{group_name}.bin")
+    label_path_full = os.path.join(LOCAL_SAVE_DIR, f"labels_{group_name}.npy")
+
+    index_path_anomaly = os.path.join(LOCAL_SAVE_DIR, f"faiss_index_anomaly_{group_name}.bin")
+    label_path_anomaly = os.path.join(LOCAL_SAVE_DIR, f"labels_anomaly_{group_name}.npy")
+
+    print(f"\nKết quả so khớp ảnh thường với {group_name}:")
+    full_group_results = search_faiss_index(
+        embedding=image_vector,
+        index_path=index_path_full,
+        label_path=label_path_full,
+        top_k=top_k
+    )
+    for label, score in full_group_results:
+        similarity = 1 / (1 + score)
+        print(f"  → {label} (similarity: {similarity*100:.2f}%)")
+
+    print(f"\nKết quả so khớp anomaly heatmap với {group_name}:")
+    anomaly_group_results = search_faiss_index(
+        embedding=anomaly_vector,
+        index_path=index_path_anomaly,
+        label_path=label_path_anomaly,
+        top_k=top_k
+    )
+    for label, score in anomaly_group_results:
+        similarity = 1 / (1 + score)
+        print(f"  → {label} (similarity: {similarity*100:.2f}%)")
+
+    # ========== GỘP NHÃN VÀ VOTING ==========
+    print(f"\nGộp nhãn từ 2 pipeline (ảnh thường + anomaly) trong nhóm '{group_name}':")
+
+    combined_results = full_group_results + anomaly_group_results
+
+    # Tính điểm similarity
+    label_scores_raw = {}
+    for label, distance in combined_results:
+        similarity = 1 / (1 + distance)
+        label_scores_raw[label] = label_scores_raw.get(label, 0) + similarity
+
+    # Chuẩn hóa thành phần trăm
+    total_similarity = sum(label_scores_raw.values())
+    label_scores_percent = {label: (score / total_similarity) * 100 for label, score in label_scores_raw.items()}
+
+    # Sắp xếp theo similarity %
+    sorted_labels = sorted(label_scores_percent.items(), key=lambda x: x[1], reverse=True)
+
+    print("Tổng điểm similarity trong nhóm bệnh (%):")
+    for label, percent in sorted_labels:
+        print(f"  → {label}: {percent:.2f}%")
+
+
+# ---------------------- MAIN FLOW ----------------------
+def main():
+    image_path = "app/static/chickenpox.jpg"
+    download_all_required_files()
+    preprocessed_pil, preprocessed_np = preprocess_image(image_path)
+
+    description = generate_description_with_Gemini(image_path)
+    print("Mô tả ảnh:", description)
+
+    print("\nPhân loại ảnh đầy đủ (Full Image):")
+    full_image_vector = embed_image_clip(preprocessed_pil)
+    full_results = search_faiss_index(
+        embedding=full_image_vector,
+        index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index.bin"),
+        label_path=os.path.join(LOCAL_SAVE_DIR, "labels.npy"),
+        top_k=5
+    )
+    for label, score in full_results:
+        print(f"  → {label} (score: {score:.4f})")
+
+    print("\nPhân tích bất thường (Anomaly Detection):")
+    anomaly_overlay, anomaly_map = generate_anomaly_overlay(preprocessed_pil)
+    overlay_path, anomaly_map_path = save_anomaly_outputs(anomaly_overlay, anomaly_map, image_path)
+
+    anomaly_vector = embed_anomaly_heatmap(overlay_path)
+    anomaly_results = search_faiss_anomaly_index(
+        embedding=anomaly_vector,
+        index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index_anomaly.bin"),
+        label_path=os.path.join(LOCAL_SAVE_DIR, "labels_anomaly.npy"),
+        top_k=5
+    )
+    for label, score in anomaly_results:
+        print(f"  → {label} (score: {score:.4f})")
+
+    # ========== KẾT HỢP KẾT QUẢ ==========
+    print("\nKết hợp kết quả từ Full Image + Anomaly (voting theo % normalize):")
+
+    combined_results = full_results + anomaly_results
+
+    # Tính tổng similarity (chưa chuẩn hóa)
+    label_scores_raw = {}
+    for label, distance in combined_results:
+        similarity = 1 / (1 + distance)
+        label_scores_raw[label] = label_scores_raw.get(label, 0) + similarity
+
+    # Chuẩn hóa về 100%
+    total_similarity = sum(label_scores_raw.values())
+    label_scores_percent = {label: (score / total_similarity) * 100 for label, score in label_scores_raw.items()}
+
+    # Sắp xếp
+    sorted_labels = sorted(label_scores_percent.items(), key=lambda x: x[1], reverse=True)
+
+    print("Tổng điểm similarity sau khi chuẩn hóa (%):")
+    for label, percent in sorted_labels:
+        print(f"  → {label}: {percent:.2f}%")
+
+    top_label, top_percent = sorted_labels[0]
+    print(f"\nNhãn được chọn (Top-1): {top_label} ({top_percent:.2f}%)")
+
+    group_name_raw = top_label.split("/")[0]
+    normalized_group_name = normalize_group_name(group_name_raw)
+    print(f"Nhóm bệnh (chuẩn hoá): {normalized_group_name}")
+    detailed_group_analysis(
+        image_vector=full_image_vector,
+        anomaly_vector=anomaly_vector,
+        group_name=normalized_group_name,
+        top_k=5
+    )
+    # ======= GỘP KẾT QUẢ TỪ 2 PIPELINE ========
+    combined_results = full_results + anomaly_results
+    aggregated_results = aggregate_combined_results(combined_results)
+
+    print("\nKết quả sau khi gộp nhãn giống nhau:")
+    for label, percent in aggregated_results:
+        print(f"  → {label}: {percent:.2f}%")
+
+    # ======= CHỌN TOP-K NHÃN (ví dụ 3) ========
+    top_labels = [label for label, _ in aggregated_results[:3]]
+
+    # ======= SINH CÂU HỎI PHÂN BIỆT ========
+    questions = generate_discriminative_questions(description, top_labels)
+    if not questions:
+        print("Không tạo được câu hỏi.")
+        return
+
+    # ======= HỎI NGƯỜI DÙNG TỪNG CÂU ========
+    user_answers = []
+    for i, question in enumerate(questions):
+        print(f"\nCâu hỏi {i+1}: {question}")
+        answer = input("→ Trả lời của bạn: ")
+        user_answers.append(answer.strip())
+
+    # ======= CHỌN NHÃN CUỐI CÙNG BẰNG LLM ========
+    final_diagnosis = select_final_diagnosis_with_llm(
+        caption=description,
+        labels=top_labels,
+        questions=questions,
+        answers=user_answers
+    )
+
+    print(f"\n Nhãn được chọn cuối cùng bởi LLM: {final_diagnosis}")
+
+
+async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None):
+    try:
+        if not image:
+            raise HTTPException(status_code=400, detail="Ảnh không được để trống")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="ID người dùng không được để trống")
+        #Tìm kiếm người dùng trong cơ sở dữ liệu
+        # user = user_collection.find_one({"_id": user_id})
+        # if not user:
+        #     raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
+        print ("Bắt đầu quá trình chẩn đoán...")
+        print("Đang tải các tệp cần thiết từ Google Cloud Storage...")
+        # download_all_required_files()
+        download_from_gcs()
+        print("Đã tải xong các tệp cần thiết.")
+        if not image.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                raise HTTPException(status_code=400, detail="Ảnh phải có định dạng .jpg, .jpeg hoặc .png")
+        image_data = await image.read()
+        print("Bắt đầu tiền xử lý ảnh")
+        preprocessed_pil, preprocessed_np = preprocess_image(image_data)
+        print("Đã tiền xử lý ảnh xong")
+        print("Bắt đầu sinh mô tả ảnh bằng Gemini")
+        description = generate_description_with_Gemini(image_data)
+        print("Mô tả ảnh:", description)
+        print("\n Phân loại ảnh đầy đủ (Full Image): ")
+        full_image_vector = embed_image_clip(preprocessed_pil)
+        full_results = search_faiss_index(
+            embedding=full_image_vector,
+            index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index.bin"),
+            label_path=os.path.join(LOCAL_SAVE_DIR, "labels.npy"),
+            top_k=5
+        )
+        for label, score in full_results:
+            print(f"  → {label} (score: {score:.4f})")
+        print("\nPhân tích bất thường (Anomaly Detection):")
+        anomaly_overlay, anomaly_map = generate_anomaly_overlay(preprocessed_pil)
+        overlay_path, anomaly_map_path = save_anomaly_outputs(anomaly_overlay, anomaly_map, image.filename)
+
+        anomaly_vector = embed_anomaly_heatmap(overlay_path)
+        anomaly_results = search_faiss_anomaly_index(
+            embedding=anomaly_vector,
+            index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index_anomaly.bin"),
+            label_path=os.path.join(LOCAL_SAVE_DIR, "labels_anomaly.npy"),
+            top_k=5
+        )
+        for label, score in anomaly_results:
+            print(f"  → {label} (score: {score:.4f})")
+        # ========== KẾT HỢP KẾT QUẢ ==========
+        print("\nKết hợp kết quả từ Full Image + Anomaly (voting theo % normalize):")
+
+        combined_results = full_results + anomaly_results
+        # Tính tổng similarity (chưa chuẩn hóa)
+        label_scores_raw = {}
+        for label, distance in combined_results:
+            similarity = 1 / (1 + distance)
+            label_scores_raw[label] = label_scores_raw.get(label, 0) + similarity
+
+        # Chuẩn hóa về 100%
+        total_similarity = sum(label_scores_raw.values())
+        label_scores_percent = {label: (score / total_similarity) * 100 for label, score in label_scores_raw.items()}
+
+        # Sắp xếp
+        sorted_labels = sorted(label_scores_percent.items(), key=lambda x: x[1], reverse=True)
+
+        print("Tổng điểm similarity sau khi chuẩn hóa (%):")
+        for label, percent in sorted_labels:
+            print(f"  → {label}: {percent:.2f}%")
+
+        top_label, top_percent = sorted_labels[0]
+        print(f"\nNhãn được chọn (Top-1): {top_label} ({top_percent:.2f}%)")
+
+        group_name_raw = top_label.split("/")[0]
+        normalized_group_name = normalize_group_name(group_name_raw)
+        print(f"Nhóm bệnh (chuẩn hoá): {normalized_group_name}")
+        detailed_group_analysis(
+            image_vector=full_image_vector,
+            anomaly_vector=anomaly_vector,
+            group_name=normalized_group_name,
+            top_k=5
+        )
+        # ======= GỘP KẾT QUẢ TỪ 2 PIPELINE ========
+        combined_results = full_results + anomaly_results
+        aggregated_results = aggregate_combined_results(combined_results)
+
+        print("\nKết quả sau khi gộp nhãn giống nhau:")
+        for label, percent in aggregated_results:
+            print(f"  → {label}: {percent:.2f}%")
+
+        # ======= CHỌN TOP-K NHÃN (ví dụ 3) ========
+        top_labels = [label for label, _ in aggregated_results[:3]]
+        print(f"\nTop {len(top_labels)} nhãn được chọn: {top_labels}")
+
+        # Lưu kết quả vào redis
+        Key = user_id
+        result_data = {
+            "description": description,
+            "top_labels": top_labels,
+        }
+        saved = await save_result_to_redis(key=Key, value=result_data)
+        if not saved:
+            raise HTTPException(status_code=500, detail="Lỗi khi lưu kết quả vào Redis")
+        
+        return JSONResponse(content=result_data, status_code=200)
+    except HTTPException as e:
+        logger.error(f"Lỗi HTTP: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Lỗi trong quá trình chẩn đoán: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi trong quá trình chẩn đoán") from e
     
 
-# def search_final(name):
-#     translate_name=translate_disease_name(name)
-#     print(f"Tên bệnh đã dịch: {translate_name}")
-#     search_json_result = search_disease_in_json(LOCAL_DATASET_PATH, translate_name)
-#     if search_json_result:
-#         print(f"Kết quả tìm kiếm trong file JSON: {search_json_result}")
-#     else:
-#         print(f"Không tìm thấy tên bệnh '{translate_name}' trong file JSON.")
-#         print ("Bắt đầu tìm kiếm bằng MedlinePlus...")
-#         search_medline_result = search_medlineplus(name)
-#         print(f"Kết quả tìm kiếm MedlinePlus: {search_medline_result}")
-#         print ("Bắt đầu trích xuất thông tin y khoa từ MedlinePlus...")
-#         extract_medical_info_result = extract_medical_info(search_medline_result)
-#         if extract_medical_info_result:
-#             print(f"Kết quả trích xuất thông tin y khoa: {extract_medical_info_result}")
-#             print("Đang thêm thông tin vào file JSON...")
-#             # append_disease_to_json(LOCAL_DATASET_PATH, extract_medical_info_result)
-#             # print("Upload file JSON lên GCS...")
-#             # upload_json_to_gcs(GCS_BUCKET, GCS_DATASET_PATH, LOCAL_DATASET_PATH)
+async def get_diagnosis_result(key: str):
+    result = await get_result_by_key(key)
+    if not result:
+        raise HTTPException(status_code=404, detail="Không tìm thấy kết quả")
+    return result
 
+async def get_discriminative_questions(key: str):
+    try:
+        if not key:
+            raise HTTPException(status_code=400, detail="Key không được để trống")
+        result = await get_result_by_key(key)
+        if not result:
+            raise HTTPException(status_code=404, detail="Không tìm thấy kết quả với key này")
+        description = result.get("description","")
+        top_labels = result.get("top_labels", [])
+        
+        if not description or not top_labels:
+            raise HTTPException(status_code=404, detail="Không đủ thông tin để tạo câu hỏi phân biệt")
+        questions = generate_discriminative_questions(description, top_labels)
+        if not questions:
+            raise HTTPException(status_code=500, detail="Không thể tạo câu hỏi phân biệt")
+        current_data_json = await get_diagnosis_result(key)
+        if not current_data_json:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu hiện tại")
+        current_data = current_data_json
+        current_data["questions"] = questions
+
+        await redis_client.set(key, json.dumps(current_data))
+        return JSONResponse(content=[{"question": questions}],status_code=200)
+    except HTTPException as e:
+        logger.error(f"Lỗi HTTP: {e.detail}")
+    except Exception as e:
+        logger.error(f"Lỗi trong quá trình lấy câu hỏi phân biệt: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi trong quá trình lấy câu hỏi phân biệt") from e
+    
+async def submit_discriminative_questions(user_answers:str,key:str):
+    try:
+        if not key:
+            raise HTTPException(status_code=400, detail="Key không được để trống")
+        if not user_answers:
+            raise HTTPException(status_code=400, detail="Câu trả lời không được để trống")
+        current_data_json = await get_diagnosis_result(key)
+        if not current_data_json:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu hiện tại")
+        current_data = current_data_json
+        # Bắt đầu đưa ra chẩn đoán cuối cùng dựa trên câu trả lời người dùng
+        description = current_data.get("description", "")
+        top_labels = current_data.get("top_labels", [])
+        questions = current_data.get("questions", [])
+        if not description or not top_labels or not questions:
+            raise HTTPException(status_code=404, detail="Không đủ thông tin để đưa ra chẩn đoán cuối cùng")
+        final_diagnosis = select_final_diagnosis_with_llm(
+            caption=description,
+            labels=top_labels,
+            questions=questions,
+            answers=user_answers,
+        )
+        if not final_diagnosis:
+            raise HTTPException(status_code=500, detail="Không thể đưa ra chẩn đoán cuối cùng")
+        # Cập nhật kết quả vào Redis
+        current_data["final_diagnosis"] = final_diagnosis
+        await redis_client.set(key, json.dumps(current_data))
+        return JSONResponse(content={"final_diagnosis": final_diagnosis}, status_code=200)
+    except HTTPException as e:
+        logger.error(f"Lỗi HTTP: {e.detail}")
+        raise e
+def generate_disease_name(disease_name: str) -> str:
+    prompt = f"""
+    Bạn là một chuyên gia y tế, bạn có khả năng chuyển hóa tên bệnh về tên chuẩn nhất của nó (tên khoa học)
+    Tên bệnh được truyền vào là: {disease_name}
+    Hãy chuyển hóa tên bệnh đó về tên khoa học chuẩn nhất.
+    Trả về tên bệnh đã chuyển hóa.
+    Nếu không thể chuyển hóa, hãy trả về "Không thể chuyển hóa tên bệnh".
+    """
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        result = re.sub(r"^(?:\w+)?\n|\n$", "", result).strip()
+        if not result:
+            return "Không thể dịch tên bệnh"
+        logger.info(f"Dịch tên bệnh: {disease_name} -> {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Lỗi khi dịch tên bệnh: {e}")
+        return "Xảy ra lỗi trong quá trình dịch tên bệnh"
+    
 def translate_disease_name(disease_name: str) -> str:
     prompt = f"""
     Bạn là một chuyên gia y tế, bạn có khả năng dịch tên bệnh từ tiếng Anh sang tiếng Việt.
@@ -537,7 +729,24 @@ def translate_disease_name(disease_name: str) -> str:
     except Exception as e:
         logger.error(f"Lỗi khi dịch tên bệnh: {e}")
         return "Xảy ra lỗi trong quá trình dịch tên bệnh"
-
+    
+def search_disease_in_json(file_path: str, disease_name: str) -> List[Dict]:
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            logger.warning("File JSON không phải là danh sách.")
+            return []
+        results = [
+            entry for entry in data
+            if isinstance(entry, dict) and disease_name.lower() in entry.get("Tên bệnh", "").lower()
+        ]
+        logger.info(f"Tìm thấy {len(results)} kết quả trong JSON cho bệnh: {disease_name}")
+        return results
+    except Exception as e:
+        logger.error(f"Lỗi tìm kiếm trong JSON: {e}")
+        return []
+    
 def search_medlineplus(ten_khoa_hoc: str) -> Optional[str]:
     if not ten_khoa_hoc or ten_khoa_hoc == "Không tìm thấy":
         logger.warning("Không có tên bệnh truyền vào cho MedlinePlus")
@@ -556,6 +765,20 @@ def search_medlineplus(ten_khoa_hoc: str) -> Optional[str]:
     except Exception as e:
         logger.error(f"Lỗi tìm kiếm MedlinePlus: {e}")
         return None
+def clean_text_json(data):
+    if isinstance(data, dict):
+        return {key: clean_text_json(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [clean_text_json(item) for item in data]
+    else:
+        return clean_text(str(data))
+
+def clean_text(text: str) -> str:
+    if not isinstance(text, str):
+        return str(text)
+    text = re.sub(r'[\\\n\r\t\*\]]', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 def clean_xml_content(xml_content: bytes) -> str:
     try:
@@ -565,29 +788,6 @@ def clean_xml_content(xml_content: bytes) -> str:
     except ET.ParseError as e:
         logger.error(f"Lỗi phân tích XML: {e}")
         return ""
-    
-def combine_user_questions_and_answers(user_questions, user_answers):
-    if not user_questions or not user_answers:
-        logger.warning("Không có câu hỏi hoặc câu trả lời từ người dùng")
-        return []
-    prompt = f"""Hãy tổng hợp các câu hỏi và câu trả lời của người dùng theo thứ tự 
-    Danh sách câu hỏi{ user_questions}
-    Danh sách câu trả lời{ user_answers}
-    Ví dụ:Bạn có nổi mẫn đó không? Có.
-    Trả về dạng chuỗi câu hỏi và câu trả lời, mỗi câu hỏi và câu trả lời cách nhau bằng dấu phẩy.
-    """
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
-        result = response.text.strip()
-        if not result:
-            logger.warning("Không có kết quả trả về từ Gemini")
-            return []
-        logger.info("Tổng hợp câu hỏi và câu trả lời thành công")
-        return result.split(", ")
-    except Exception as e:
-        logger.error(f"Lỗi khi tổng hợp câu hỏi và câu trả lời: {e}")
-        return []
 
 def extract_medical_info(text: str) -> Dict:
     prompt = f"""
@@ -625,252 +825,19 @@ def extract_medical_info(text: str) -> Dict:
     except Exception as e:
         logger.error(f"Lỗi trích xuất thông tin y khoa: {e}")
         return {}
-
-def clean_text_json(data):
-    if isinstance(data, dict):
-        return {key: clean_text_json(value) for key, value in data.items()}
-    elif isinstance(data, list):
-        return [clean_text_json(item) for item in data]
-    else:
-        return clean_text(str(data))
-
-def clean_text(text: str) -> str:
-    if not isinstance(text, str):
-        return str(text)
-    text = re.sub(r'[\\\n\r\t\*\]]', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
-
-def process_image(image_data: bytes):
-    if not image_data:
-        logger.error("Không có dữ liệu ảnh để xử lý.")
-        return None, [], [], [], []
-    else:
-        print("Đã nhận dữ liệu ảnh, bắt đầu xử lý...")
-        logger.info("Bắt đầu xử lý ảnh...")
-    processed = preprocess_image(image_data)
-    print("Đã xử lý ảnh",processed)
-    if processed is None:
-        logger.error("Lỗi xử lý ảnh, dừng quy trình.")
-        return None, [], [], [], []
-
-    processed_dir = Path("app/static/processed")
-    processed_dir.mkdir(parents=True, exist_ok=True)
-    processed_path = processed_dir / "processed_temp.jpg"
-    cv2.imwrite(str(processed_path), processed)
-    upload_to_gcs(str(processed_path), GCS_IMAGE_PATH + str(processed_path.name))
-
-    embedding = embed_image(image_data)
-    result_labels_simple = []
-    detailed_labels_normal = []
-    if embedding is not None:
-        detailed_labels_normal = search_similar_images(embedding)
-        print("detailed_labels_normal",detailed_labels_normal)
-        #Cắt nhãn
-        detailed_labels_normal = extract_disease_named(detailed_labels_normal)
-        print("detailed_labels_normal sau khi cắt",detailed_labels_normal)
-        result_labels_simple = [item["label"] for item in detailed_labels_normal]
-        print("result_labels_simple",result_labels_simple)
-        logger.info("🔍 Ảnh gốc:")
-        for item in detailed_labels_normal:
-            logger.info(f"- {item['label']} (cosine: {item['cosine_similarity']:.4f})")
-
-    anomaly_map = generate_anomaly_map(image_data)
-    anomaly_result_labels_simple = []
-    detailed_labels_anomaly = []
-    if anomaly_map is not None:
-        anomaly_map_path = processed_dir / "anomaly_map_temp.jpg"
-        cv2.imwrite(str(anomaly_map_path), anomaly_map)
-        upload_to_gcs(str(anomaly_map_path), GCS_IMAGE_PATH + str(anomaly_map_path.name))
-
-        anomaly_map_embedding = embed_anomaly_map(anomaly_map)
-        if anomaly_map_embedding is not None:
-            detailed_labels_anomaly = search_anomaly_images(anomaly_map_embedding)
-            print("detailed_labels_anomaly",detailed_labels_anomaly)
-            # Cắt nhãn
-            detailed_labels_anomaly = extract_disease_named(detailed_labels_anomaly)
-            print("detailed_labels_anomaly sau khi cắt",detailed_labels_anomaly)
-            anomaly_result_labels_simple = [item["label"] for item in detailed_labels_anomaly]
-            logger.info("Anomaly Map:")
-            for item in detailed_labels_anomaly:
-                logger.info(f"- {item['label']} (cosine: {item['cosine_similarity']:.4f})")
-    final_labels = combine_labels(detailed_labels_anomaly, detailed_labels_normal)
-    logger.info(f"Nhãn tổng hợp cuối cùng: {final_labels}")
-
-    return final_labels, result_labels_simple, anomaly_result_labels_simple, detailed_labels_normal, detailed_labels_anomaly
-
-async def start_diagnois(image: UploadFile = File(...),user_id: Optional[str] = None):
-    try:
-        download_from_gcs()
-        load_faiss_index()
-        if not image.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-            raise HTTPException(status_code=400, detail="Ảnh phải có định dạng .jpg, .jpeg hoặc .png")
-        image_data = await image.read()
-
-        Key =user_id
-        print(f"Key người dùng: {Key}")
-        final_labels, result_labels_simple, anomaly_result_labels_simple, detailed_labels_normal, detailed_labels_anomaly = process_image(image_data)
-        if not final_labels:
-            raise HTTPException(status_code=500, detail="Không có final_labels được tạo")
-
-        image_description = generate_description_with_Gemini(image_data)
-        if not image_description:
-            raise HTTPException(status_code=500, detail="Không thể tạo mô tả ảnh")
-
-        logger.info(f"Mô tả ảnh: {image_description}")
-
-        result_data = {
-            "final_labels": final_labels,
-            "image_description": image_description,
-            "result_labels": result_labels_simple,
-            "anomaly_result_labels": anomaly_result_labels_simple,
-            "detailed_labels_normal": detailed_labels_normal,
-            "detailed_labels_anomaly": detailed_labels_anomaly
-        }
-        saved = await save_result_to_redis(key=Key, value=result_data)
-        if not saved:
-            logger.warning("Không thể lưu kết quả vào Redis")
-            raise HTTPException(status_code=500, detail="Không thể lưu kết quả vào Redis")
-
-        return JSONResponse(content=result_data, status_code=200)
-
-    except HTTPException as e:
-        logger.error(f"Lỗi HTTP: {e.detail}")
-        raise e
-    except Exception as e:
-        logger.error(f"Lỗi khác: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Lỗi trong quá trình chẩn đoán: {str(e)}")
     
-async def get_diagnosis_result(key: str):
-    result = await get_result_by_key(key)
-    if not result:
-        raise HTTPException(status_code=404, detail="Không tìm thấy kết quả")
-    return result
+def download_from_gcs():
+    storage_client = GCS_KEY_PATH
+    bucket = storage_client.bucket(GCS_BUCKET)
+    files_to_download = [
+        (GCS_DATASET_PATH, LOCAL_DATASET_PATH),
+    ]
+    for gcs_path, local_path in files_to_download:
+        blob = bucket.blob(gcs_path)
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        blob.download_to_filename(local_path)
+        logger.info(f"Tải về {gcs_path} to {local_path}")
 
-async def submit_user_description(user_description: str, key: str):
-    try:
-        if not user_description or not key:
-            raise HTTPException(status_code=400, detail="Thiếu mô tả ảnh hoặc key")
-        result = await get_result_by_key(key)
-        if not result:
-            raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chẩn đoán")
-        current_data_json = await get_diagnosis_result(key)
-        if not current_data_json:
-            raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu chẩn đoán hiện tại")
-        current_data = current_data_json
-        current_data["user_description"] = user_description
-
-        await redis_client.set(key, json.dumps(current_data), ex=3600)  
-        return JSONResponse(content={"message": "Mô tả người dùng đã được lưu thành công","user description":user_description}, status_code=200)
-    except HTTPException as e:
-        logger.error(f"Lỗi khi lưu mô tả người dùng: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi khi lưu mô tả người dùng: {str(e)}")     
-        
-async def get_differentiation_questions(key:str):
-    try:
-        result = await get_result_by_key(key)
-        if not result:
-            raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chẩn đoán")
-        user_description = result.get("user_description", "")
-        if not user_description or not key:
-            raise HTTPException(status_code=400, detail="Thiếu mô tả ảnh hoặc key")
-        result_medical_entities = generate_medical_entities(
-            user_description or "Không có mô tả từ người dùng",
-            result.get("image_description", "") or "Không có mô tả từ ảnh"
-        )
-        if not result_medical_entities:
-            raise HTTPException(status_code=500, detail="Không thể tạo mô tả y khoa")
-        
-        questions = compare_descriptions_and_labels(result_medical_entities,result.get("final_labels", ""))
-        if not questions:
-            raise HTTPException(status_code=500, detail="Không thể tạo câu hỏi phân biệt")
-        logger.info(f"Câu hỏi phân biệt: {questions}")
-        current_data_json = await get_diagnosis_result(key)
-        if not current_data_json:
-            raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu chẩn đoán hiện tại")
-        current_data= current_data_json
-        current_data["questions"] = questions
-        current_data["medical_entities"] = result_medical_entities
-
-        await redis_client.set(key, json.dumps(current_data), ex=3600)  
-        return JSONResponse(content=[{"questions": questions},{"medical_entites":result_medical_entities}], status_code=200)
-    except HTTPException as e:
-        logger.error(f"Lỗi khi tạo câu hỏi phân biệt: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi khi tạo câu hỏi phân biệt: {str(e)}")
-
-async def submit_differation_questions(user_answers:dict,key:str):
-    try:
-        result = await get_result_by_key(key)
-        if not result:
-            raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chẩn đoán")
-        medical_entities = result.get("medical_entities", "")
-        if not medical_entities:
-            raise HTTPException(status_code=500, detail="Không có mô tả y khoa")
-        if not user_answers or not isinstance(user_answers, dict):
-            raise HTTPException(status_code=400, detail="Dữ liệu câu trả lời không hợp lệ")
-        questions = result.get("questions", [])
-        if not questions:
-            raise HTTPException(status_code=404, detail="Không tìm thấy câu hỏi phân biệt")
-        combined_answer = combine_user_questions_and_answers(questions, user_answers)
-
-        combined_description= f"{medical_entities}\n\n{combined_answer}"
-        final_labels = result.get("final_labels", "")
-        print("\n--- Đang loại trừ nhãn không phù hợp ---")
-        result_filter =filter_incorrect_labels_by_user_description(combined_description, final_labels)
-        print("Kết quả loại trừ nhãn:", result_filter)
-        if not result_filter:
-            print("Không có kết quả từ Gemini.")
-            return
-        refined_labels = result_filter.get("giu_lai", [])
-        print("Các nhãn được giữ lại:", refined_labels)
-        if not refined_labels:
-            print("Không còn nhãn nào phù hợp. Đề xuất tham khảo bác sĩ.")
-        else:
-            print("Các nhãn còn lại sau loại trừ:")
-        
-        result_redis = []
-        for label_info in refined_labels:
-            label = label_info.get("label")
-            print(f"- Nhãn: {label}")
-            ket_qua = "-".join(label.split("-"))
-            print(f"- Kết quả: {ket_qua}")
-            suitability = label_info.get("do_phu_hop")
-            similarity= label_info.get("similarity", "")
-            print(f"- {ket_qua} (Mức độ phù hợp: {suitability}) (Similarity: {similarity})")
-            result_redis.append({"ketqua": ket_qua,"do_phu_hop": suitability, "similarity": similarity})
-        current_data_json = await get_diagnosis_result(key)
-        current_data_json["result"] = result_redis
-        print(result_redis)
-        await redis_client.set(key, json.dumps(current_data_json), ex=3600) 
-        if not current_data_json:
-            raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu chẩn đoán hiện tại")
-        return JSONResponse(content=[{"result":result_redis}], status_code=200)
-    except HTTPException as e:
-        logger.error(f"Lỗi khi loại trừ nhãn không phù hợp: {e.detail}")
-        raise HTTPException(status_code=500, detail=f"Lỗi khi loại trừ nhãn không phù hợp: {str(e)}")
-    
-
-def generate_disease_name(disease_name: str) -> str:
-    prompt = f"""
-    Bạn là một chuyên gia y tế, bạn có khả năng chuyển hóa tên bệnh về tên chuẩn nhất của nó (tên khoa học)
-    Tên bệnh được truyền vào là: {disease_name}
-    Hãy chuyển hóa tên bệnh đó về tên khoa học chuẩn nhất.
-    Trả về tên bệnh đã chuyển hóa.
-    Nếu không thể chuyển hóa, hãy trả về "Không thể chuyển hóa tên bệnh".
-    """
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
-        result = response.text.strip()
-        result = re.sub(r"^(?:\w+)?\n|\n$", "", result).strip()
-        if not result:
-            return "Không thể dịch tên bệnh"
-        logger.info(f"Dịch tên bệnh: {disease_name} -> {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Lỗi khi dịch tên bệnh: {e}")
-        return "Xảy ra lỗi trong quá trình dịch tên bệnh"
-        
 async def knowledge(disease_name: str):
     try:
         if not disease_name:
@@ -883,7 +850,7 @@ async def knowledge(disease_name: str):
         if not search_result:
             medline_result = search_medlineplus(disease_name)
             if medline_result:
-                extracted_info = extract_medical_info(medline_result)
+                extracted_info = extract_medical_info(medline_result)   
                 if extracted_info:
                     search_result = [extracted_info]
         if not search_result:
@@ -893,17 +860,3 @@ async def knowledge(disease_name: str):
     except Exception as e:
         logger.error(f"Lỗi khi tra cứu thông tin bệnh: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi tra cứu thông tin bệnh: {str(e)}")
-
-async def get_final_result(key: str):
-    try:
-        result = await get_result_by_key(key)
-        result_diagnosis = result.get("result", [])
-        if not result:
-            raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chẩn đoán")
-        if not result_diagnosis:
-            raise HTTPException (status_code=404,detail="Kết quả không tồn tại")
-        return JSONResponse(content={ "diagnosis": result_diagnosis}, status_code=200)
-    except Exception as e:
-        logger.error(f"Lỗi khi lấy kết quả chẩn đoán: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi khi lấy kết quả chẩn đoán")
-
