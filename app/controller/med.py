@@ -93,7 +93,26 @@ vit_model.eval()
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 
-
+def generate_disease_name(disease_name: str) -> str:
+    prompt = f"""
+    Bạn là một chuyên gia y tế, bạn có khả năng chuyển hóa tên bệnh về tên chuẩn nhất của nó (tên khoa học)
+    Tên bệnh được truyền vào là: {disease_name}
+    Hãy chuyển hóa tên bệnh đó về tên khoa học chuẩn nhất.
+    Trả về tên bệnh đã chuyển hóa.
+    Nếu không thể chuyển hóa, hãy trả về "Không thể chuyển hóa tên bệnh".
+    """
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        result = re.sub(r"^(?:\w+)?\n|\n$", "", result).strip()
+        if not result:
+            return "Không thể dịch tên bệnh"
+        logger.info(f"Dịch tên bệnh: {disease_name} -> {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Lỗi khi dịch tên bệnh: {e}")
+        return "Xảy ra lỗi trong quá trình dịch tên bệnh"
 
 
 
@@ -409,107 +428,6 @@ def detailed_group_analysis(image_vector: np.ndarray, anomaly_vector: np.ndarray
         print(f"  → {label}: {percent:.2f}%")
 
 
-# ---------------------- MAIN FLOW ----------------------
-def main():
-    image_path = "app/static/chickenpox.jpg"
-    download_all_required_files()
-    preprocessed_pil, preprocessed_np = preprocess_image(image_path)
-
-    description = generate_description_with_Gemini(image_path)
-    print("Mô tả ảnh:", description)
-
-    print("\nPhân loại ảnh đầy đủ (Full Image):")
-    full_image_vector = embed_image_clip(preprocessed_pil)
-    full_results = search_faiss_index(
-        embedding=full_image_vector,
-        index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index.bin"),
-        label_path=os.path.join(LOCAL_SAVE_DIR, "labels.npy"),
-        top_k=5
-    )
-    for label, score in full_results:
-        print(f"  → {label} (score: {score:.4f})")
-
-    print("\nPhân tích bất thường (Anomaly Detection):")
-    anomaly_overlay, anomaly_map = generate_anomaly_overlay(preprocessed_pil)
-    overlay_path, anomaly_map_path = save_anomaly_outputs(anomaly_overlay, anomaly_map, image_path)
-
-    anomaly_vector = embed_anomaly_heatmap(overlay_path)
-    anomaly_results = search_faiss_anomaly_index(
-        embedding=anomaly_vector,
-        index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index_anomaly.bin"),
-        label_path=os.path.join(LOCAL_SAVE_DIR, "labels_anomaly.npy"),
-        top_k=5
-    )
-    for label, score in anomaly_results:
-        print(f"  → {label} (score: {score:.4f})")
-
-    # ========== KẾT HỢP KẾT QUẢ ==========
-    print("\nKết hợp kết quả từ Full Image + Anomaly (voting theo % normalize):")
-
-    combined_results = full_results + anomaly_results
-
-    # Tính tổng similarity (chưa chuẩn hóa)
-    label_scores_raw = {}
-    for label, distance in combined_results:
-        similarity = 1 / (1 + distance)
-        label_scores_raw[label] = label_scores_raw.get(label, 0) + similarity
-
-    # Chuẩn hóa về 100%
-    total_similarity = sum(label_scores_raw.values())
-    label_scores_percent = {label: (score / total_similarity) * 100 for label, score in label_scores_raw.items()}
-
-    # Sắp xếp
-    sorted_labels = sorted(label_scores_percent.items(), key=lambda x: x[1], reverse=True)
-
-    print("Tổng điểm similarity sau khi chuẩn hóa (%):")
-    for label, percent in sorted_labels:
-        print(f"  → {label}: {percent:.2f}%")
-
-    top_label, top_percent = sorted_labels[0]
-    print(f"\nNhãn được chọn (Top-1): {top_label} ({top_percent:.2f}%)")
-
-    group_name_raw = top_label.split("/")[0]
-    normalized_group_name = normalize_group_name(group_name_raw)
-    print(f"Nhóm bệnh (chuẩn hoá): {normalized_group_name}")
-    detailed_group_analysis(
-        image_vector=full_image_vector,
-        anomaly_vector=anomaly_vector,
-        group_name=normalized_group_name,
-        top_k=5
-    )
-    # ======= GỘP KẾT QUẢ TỪ 2 PIPELINE ========
-    combined_results = full_results + anomaly_results
-    aggregated_results = aggregate_combined_results(combined_results)
-
-    print("\nKết quả sau khi gộp nhãn giống nhau:")
-    for label, percent in aggregated_results:
-        print(f"  → {label}: {percent:.2f}%")
-
-    # ======= CHỌN TOP-K NHÃN (ví dụ 3) ========
-    top_labels = [label for label, _ in aggregated_results[:3]]
-
-    # ======= SINH CÂU HỎI PHÂN BIỆT ========
-    questions = generate_discriminative_questions(description, top_labels)
-    if not questions:
-        print("Không tạo được câu hỏi.")
-        return
-
-    # ======= HỎI NGƯỜI DÙNG TỪNG CÂU ========
-    user_answers = []
-    for i, question in enumerate(questions):
-        print(f"\nCâu hỏi {i+1}: {question}")
-        answer = input("→ Trả lời của bạn: ")
-        user_answers.append(answer.strip())
-
-    # ======= CHỌN NHÃN CUỐI CÙNG BẰNG LLM ========
-    final_diagnosis = select_final_diagnosis_with_llm(
-        caption=description,
-        labels=top_labels,
-        questions=questions,
-        answers=user_answers
-    )
-
-    print(f"\n Nhãn được chọn cuối cùng bởi LLM: {final_diagnosis}")
 
 
 async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None):
@@ -525,7 +443,7 @@ async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None
         print ("Bắt đầu quá trình chẩn đoán...")
         print("Đang tải các tệp cần thiết từ Google Cloud Storage...")
         # download_all_required_files()
-        download_from_gcs()
+        # download_from_gcs()
         print("Đã tải xong các tệp cần thiết.")
         if not image.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
                 raise HTTPException(status_code=400, detail="Ảnh phải có định dạng .jpg, .jpeg hoặc .png")
@@ -611,6 +529,7 @@ async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None
             "top_labels": top_labels,
         }
         saved = await save_result_to_redis(key=Key, value=result_data)
+        print("Dữ liệu:",saved)
         if not saved:
             raise HTTPException(status_code=500, detail="Lỗi khi lưu kết quả vào Redis")
         
@@ -689,26 +608,7 @@ async def submit_discriminative_questions(user_answers:str,key:str):
     except HTTPException as e:
         logger.error(f"Lỗi HTTP: {e.detail}")
         raise e
-def generate_disease_name(disease_name: str) -> str:
-    prompt = f"""
-    Bạn là một chuyên gia y tế, bạn có khả năng chuyển hóa tên bệnh về tên chuẩn nhất của nó (tên khoa học)
-    Tên bệnh được truyền vào là: {disease_name}
-    Hãy chuyển hóa tên bệnh đó về tên khoa học chuẩn nhất.
-    Trả về tên bệnh đã chuyển hóa.
-    Nếu không thể chuyển hóa, hãy trả về "Không thể chuyển hóa tên bệnh".
-    """
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
-        result = response.text.strip()
-        result = re.sub(r"^(?:\w+)?\n|\n$", "", result).strip()
-        if not result:
-            return "Không thể dịch tên bệnh"
-        logger.info(f"Dịch tên bệnh: {disease_name} -> {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Lỗi khi dịch tên bệnh: {e}")
-        return "Xảy ra lỗi trong quá trình dịch tên bệnh"
+
     
 def translate_disease_name(disease_name: str) -> str:
     prompt = f"""

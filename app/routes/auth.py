@@ -35,23 +35,33 @@ async def get_user_by_id(user_id:str):
     return user
 
 @router.post("/register", response_model=UserModel)
-async def create_new_user(user_data: CreateUserModel):
+async def create_new_user(user_data: CreateUserModel,image:Upload = File(None)):
     """
     Tạo người dùng mới.
     """
     try:
-        urlImage = handle_upload(user_data.urlImage)
-        user_data.urlImage = urlImage 
-        return await create_user(user_data.dict())
+        urlImage = handle_upload(image)
+        user_dict= user_data.dict()
+        user_dict['urlImage'] = urlImage
+        return await create_user(user_data=user_dict.dict())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     
 
 @router.put("/users/{user_id}", response_model=UserModel)
-async def update_user_by_id(user_id: str, update_data: CreateUserModel):
-    urlImage = handle_upload(update_data.urlImage)
-    update_data.urlImage = urlImage 
-    return await update_user(user_id, update_data=update_data.dict())
+async def update_user_by_id(user_id: str, update_data: CreateUserModel, image: Upload = File(None)):
+    """
+    Cập nhật thông tin người dùng theo ID.
+    """
+    urlImage = handle_upload(image) if image else None
+
+    user_dict = update_data.dict(exclude_unset=True)
+
+    if urlImage:
+        user_dict["urlImage"] = urlImage
+
+    # Gửi dữ liệu dict vào hàm cập nhật
+    return await update_user(user_id, update_data=user_dict)
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str):

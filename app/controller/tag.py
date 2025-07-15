@@ -46,3 +46,29 @@ async def get_tag_by_id(tag_id: str):
         tag["_id"] = str(tag["_id"])  # Chuyển ObjectId thành str
         return TagModel(**tag)
     return None
+
+async def update_tag(tag_id: str, name: Optional[str] = None):
+    """
+    Cập nhật thông tin thẻ.
+    """
+    update_data = {}
+    if name:
+        update_data["name"] = name
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Không có dữ liệu để cập nhật")
+    
+    result = await tags_collection.update_one({"_id": ObjectId(tag_id)}, {"$set": update_data})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Thẻ không tồn tại hoặc không có thay đổi nào")
+    
+    updated_tag = await get_tag_by_id(tag_id)
+    return updated_tag
+
+async def delete_tag(tag_id: str):
+    """
+    Xóa thẻ theo ID.
+    """
+    result = await tags_collection.delete_one({"_id": ObjectId(tag_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Thẻ không tồn tại")
+    return {"message": "Thẻ đã được xóa thành công"}
