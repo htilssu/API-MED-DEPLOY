@@ -28,7 +28,6 @@ async def read_root():
 async def health_check():
     return {"status": "OK"}
 
-app.include_router(med.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(uv.router, prefix="/api")
 app.include_router(diagnose.router, prefix="/api")
@@ -37,6 +36,8 @@ app.include_router(legithostpital.router, prefix="/api")
 app.include_router(location.router, prefix="/api")
 app.include_router(paper.router, prefix="/api")
 app.include_router(tag.router, prefix="/api")
+app.include_router(med.router, prefix="/api")
+
 
 
 if __name__ == "__main__":

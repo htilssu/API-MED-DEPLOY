@@ -36,7 +36,6 @@ class CreateUserModel(BaseModel):
     phone: Optional[str] = Field(None, description="Số điện thoại người dùng")
     password: Optional[str] = Field(None, description="Mật khẩu người dùng")
     dateOfBirth: date = Field(..., description="Ngày sinh của người dùng")
-    urlImage: Optional[str] = Field(None, description="URL ảnh đại diện của người dùng")
 
 # Model cho đăng nhập
 class LoginModel(BaseModel):
