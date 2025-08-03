@@ -1,4 +1,4 @@
-from app.controller.tag import create_tag, get_all_tags, get_tag_by_id
+from app.controller.tag import create_tag, get_all_tags, get_tag_by_id, update_tag,delete_tag
 from fastapi import APIRouter, UploadFile, File, Query, Body, Form, HTTPException
 from typing import List, Optional
 from fastapi.responses import JSONResponse
@@ -25,3 +25,23 @@ async def get_tag_by_id_route(tag_id: str):
     if not tag:
         raise HTTPException(status_code=404, detail="Thẻ không tồn tại")
     return tag.model_dump(by_alias=True)
+
+@router.put("/tag/{tag_id}", response_model=TagModel)
+async def update_tag_route(
+    tag_id: str,
+    name: Optional[str] = Form(None, description="Tên mới của thẻ")
+):
+    """
+    Cập nhật thông tin thẻ theo ID.
+    """
+    tag = await update_tag(tag_id=tag_id, name=name)
+    return tag.model_dump(by_alias=True)
+
+
+@router.delete("/tag/{tag_id}", status_code=204)
+async def delete_tag_route(tag_id: str):
+    """
+    Xóa thẻ theo ID.
+    """
+    await delete_tag(tag_id)
+    return JSONResponse(status_code=204, content=None)

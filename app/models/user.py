@@ -37,6 +37,12 @@ class CreateUserModel(BaseModel):
     password: Optional[str] = Field(None, description="Mật khẩu người dùng")
     dateOfBirth: date = Field(..., description="Ngày sinh của người dùng")
 
+class UpdateUserModel(BaseModel):
+    name: Optional[str] = Field(None, description="Tên người dùng")
+    email: Optional[EmailStr] = Field(None, description="Email người dùng")
+    phone: Optional[str] = Field(None, description="Số điện thoại người dùng")
+    dateOfBirth: Optional[date] = Field(None, description="Ngày sinh của người dùng")
+
 # Model cho đăng nhập
 class LoginModel(BaseModel):
     email: EmailStr = Field(..., description="Email người dùng để đăng nhập")

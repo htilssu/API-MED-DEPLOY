@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException,status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile,status
 from typing import List
-from app.controller.auth import get_all_users, get_user, create_user, login_user,update_user,delete_user,forgot_password,reset_password
-from app.models.user import CreateUserModel, LoginModel,UserModel
+from datetime import date, datetime
+
+
+from pydantic import EmailStr
+from pymssql import Date
+from app.controller.auth import get_all_users, get_user, create_user, login_user,update_user,delete_user,forgot_password,reset_password,resend_verification_code
+from app.models.user import CreateUserModel, LoginModel,UserModel,UpdateUserModel
 from app.config.cloudinary_config import cloudinary
 from fastapi import UploadFile as Upload, File, Form
 from io import BytesIO
@@ -35,33 +40,59 @@ async def get_user_by_id(user_id:str):
     return user
 
 @router.post("/register", response_model=UserModel)
-async def create_new_user(user_data: CreateUserModel,image:Upload = File(None)):
-    """
-    Tạo người dùng mới.
-    """
+async def create_new_user(
+    name: str = Form(...),
+    email: EmailStr = Form(...),
+    phone: str = Form(...),
+    password: str = Form(...),
+    dateOfBirth: date = Form(...),
+    image: UploadFile = File(None)
+):
     try:
-        urlImage = handle_upload(image)
-        user_dict= user_data.dict()
-        user_dict['urlImage'] = urlImage
-        return await create_user(user_data=user_dict.dict())
+        # Chuyển date -> datetime
+        dob_datetime = datetime.combine(dateOfBirth, datetime.min.time())
+
+        # Nhớ await handle_upload!
+        urlImage = await handle_upload(image)
+
+        user_data = {
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "password": password,
+            "dateOfBirth": dob_datetime,
+            "urlImage": urlImage
+        }
+
+        return await create_user(user_data=user_data)
+
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     
 
 @router.put("/users/{user_id}", response_model=UserModel)
-async def update_user_by_id(user_id: str, update_data: CreateUserModel, image: Upload = File(None)):
+async def update_user_by_id(
+    user_id: str,
+    name: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    image: Optional[Upload] = File(None),
+):
     """
-    Cập nhật thông tin người dùng theo ID.
+    Cập nhật thông tin người dùng theo ID. Hỗ trợ cập nhật ảnh đại diện.
     """
-    urlImage = handle_upload(image) if image else None
+    update_data = {}
 
-    user_dict = update_data.dict(exclude_unset=True)
+    if name: update_data["name"] = name
+    if email: update_data["email"] = email
+    if phone: update_data["phone"] = phone
 
-    if urlImage:
-        user_dict["urlImage"] = urlImage
+    if image:
+        url_image = await handle_upload(image)
+        update_data["urlImage"] = url_image
 
-    # Gửi dữ liệu dict vào hàm cập nhật
-    return await update_user(user_id, update_data=user_dict)
+    updated_user = await update_user(user_id, update_data)
+    return updated_user.model_dump(by_alias=True)
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str):
@@ -96,6 +127,18 @@ async def reset_password_route(email: str, verification_code: str, new_password:
     """
     try:
         return await reset_password(email, verification_code, new_password)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+@router.post("/resend-verification-code")
+async def resend_verification_code_route(email: str):
+    """
+    Gửi lại mã xác minh.
+    """
+    try:
+        return await resend_verification_code(email)
     except HTTPException as e:
         raise e
     except Exception as e:
