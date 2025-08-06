@@ -8,6 +8,7 @@ from app.controller.med import (
     get_discriminative_questions,
     knowledge,
     generate_disease_name,
+    knowledge_translate
 )
 
 router = APIRouter()
@@ -80,3 +81,13 @@ async def get_disease_knowledge(
     Tra cứu thông tin bệnh từ dataset nội bộ hoặc MedlinePlus.
     """
     return await knowledge(disease_name)
+
+
+@router.get("/knowledge/translate", response_model=dict)
+async def translate_disease_knowledge(
+    disease_name: str = Query(..., description="Tên bệnh cần dịch (tiếng Việt hoặc tiếng Anh)")
+):
+    """
+    Dịch tên bệnh sang tiếng Anh (tên khoa học).
+    """
+    return await knowledge_translate(disease_name)
