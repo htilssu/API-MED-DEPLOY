@@ -293,12 +293,13 @@ async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None
 
         print("\nChẩn đoán nhóm bệnh với Gemini:")
         diagnosis = generate_diagnosis_with_gemini(description, combined_results)
+        print(f"Chẩn đoán nhóm bệnh: {diagnosis}")
         normalized_group_diagnosis = normalize_diagnosis(diagnosis)
         print(f"Chẩn đoán nhóm bệnh: {format_diagnosis_output(normalized_group_diagnosis)}")
         combined_results=detailed_group_analysis(
             image_vector=full_image_vector,
             anomaly_vector=anomaly_vector,
-            group_name=normalized_group_name,
+            group_name=normalized_group_diagnosis,
             top_k=15
         )
         print(f"combined_results: {combined_results}")
@@ -311,7 +312,7 @@ async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None
         result_data = {
             "description": description,
             "disease_primary": disease_primary,
-            "normalized_group_name": normalized_group_name,
+            "normalized_group_name":normalized_group_diagnosis ,
         }
         saved = await save_result_to_redis(key=Key, value=result_data)
         print("Dữ liệu:",saved)
@@ -410,10 +411,11 @@ async def submit_discriminative_questions(user_answers:str,key:str):
     
 def translate_disease_name(disease_name: str) -> str:
     prompt = f"""
-    Bạn là một chuyên gia y tế, bạn có khả năng dịch tên bệnh từ tiếng Anh sang tiếng Việt.
+    Bạn là một chuyên gia y tế, bạn có khả năng dịch tên bệnh từ tiếng việt sang tiếng Anh (Tên khoa học của bệnh đó).
     Tên bệnh được truyền vào là: {disease_name}
-    Hãy dịch tên bệnh đó sang tiếng Việt.
+    Hãy dịch tên bệnh đó sang tên khoa học .
     Trả về tên bệnh đã dịch.
+    Chỉ trả về tên bệnh đã dịch, không thêm giải thích, không in Markdown, không thêm ký tự thừa.
     """
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
@@ -536,21 +538,23 @@ def download_from_gcs():
         blob.download_to_filename(local_path)
         logger.info(f"Tải về {gcs_path} to {local_path}")
 
+
+
 async def knowledge(disease_name: str):
     try:
-        if not disease_name:
-            raise HTTPException(status_code=400, detail="Cần cung cấp tên bệnh")
-        disease_name = generate_disease_name(disease_name)
-        if not disease_name or disease_name == "Không thể chuyển hóa tên bệnh":
-            raise HTTPException(status_code=400, detail="Không thể chuyển hóa tên bệnh")
-        translated_name= translate_disease_name(disease_name)
-        search_result = search_disease_in_json(LOCAL_DATASET_PATH, translated_name)
-        if not search_result:
-            medline_result = search_medlineplus(disease_name)
-            if medline_result:
-                extracted_info = extract_medical_info(medline_result)   
-                if extracted_info:
-                    search_result = [extracted_info]
+        # if not disease_name:
+        #     raise HTTPException(status_code=400, detail="Cần cung cấp tên bệnh")
+        # disease_name = generate_disease_name(disease_name)
+        # if not disease_name or disease_name == "Không thể chuyển hóa tên bệnh":
+        #     raise HTTPException(status_code=400, detail="Không thể chuyển hóa tên bệnh")
+        # translated_name= translate_disease_name(disease_name)
+        # search_result = search_disease_in_json(LOCAL_DATASET_PATH, translated_name)
+        # if not search_result:
+        medline_result = search_medlineplus(disease_name)
+        if medline_result:
+            extracted_info = extract_medical_info(medline_result)   
+            if extracted_info:
+                search_result = [extracted_info]
         if not search_result:
             raise HTTPException(status_code=404, detail=f"Không tìm thấy thông tin cho bệnh: {disease_name}")
         logger.info(f"Tra cứu thông tin bệnh: {disease_name}")
@@ -558,3 +562,29 @@ async def knowledge(disease_name: str):
     except Exception as e:
         logger.error(f"Lỗi khi tra cứu thông tin bệnh: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi tra cứu thông tin bệnh: {str(e)}")
+    
+async def knowledge_translate(disease_name: str):
+    try:
+        if not disease_name:
+            raise HTTPException(status_code=400, detail="Cần cung cấp tên bệnh")
+        translated_name = translate_disease_name(disease_name)
+        if not translated_name or translated_name == "Không thể dịch tên bệnh":
+            raise HTTPException(status_code=400, detail="Không thể dịch tên bệnh")
+        logger.info(f"Dịch tên bệnh: {disease_name} -> {translated_name}")
+        print(f"Dịch tên bệnh: {disease_name} -> {translated_name}")
+        print("Tra cứu thông tin bệnh...")
+        medline_result = search_medlineplus(translated_name)
+        if medline_result:
+            extracted_info = extract_medical_info(medline_result)   
+            if extracted_info:
+                search_result = [extracted_info]
+        if not search_result:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy thông tin cho bệnh: {translated_name}")
+        logger.info(f"Tra cứu thông tin bệnh: {translated_name}")
+        return JSONResponse(content={"translated_name": translated_name, "disease_info": search_result}, status_code=200)
+    except HTTPException as e:
+        logger.error(f"Lỗi HTTP: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Lỗi khi dịch tên bệnh: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi khi dịch tên bệnh: {str(e)}")

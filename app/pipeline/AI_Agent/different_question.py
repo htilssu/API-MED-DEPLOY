@@ -39,6 +39,7 @@ def generate_discriminative_questions(
         "Hãy hỏi các biểu hiện mà chỉ 1 trong các bệnh này có khả năng gặp.",
     ]
     variation = random.choice(variation_prompts)
+    print(f"Variation prompt: {variation}")
 
     prompt = f"""
 Bạn là bác sĩ da liễu chuyên về nhóm bệnh **{group_disease_name}**.

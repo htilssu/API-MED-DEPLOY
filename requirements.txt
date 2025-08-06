@@ -30,3 +30,4 @@ bcrypt
 huggingface_hub 
 cloudinary
 geopy
+pymssql
