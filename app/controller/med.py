@@ -63,6 +63,10 @@ LOCAL_SAVE_DIR = "app/static/"
 GCS_DATASET = f"dataset"
 GCS_DATASET_PATH = f"{GCS_DATASET}/dataset.json"
 LOCAL_DATASET_PATH = "app/static/json/dataset.json"
+GCS_BUCKET_2 = "rag_3"
+LOCAL_SAVE_DIR_2 = "app/processed"
+
+
 
 
 GCS_KEY_PATH = storage.Client.from_service_account_json("app/iam-key.json")
@@ -220,27 +224,81 @@ async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None
     try:
         if not image:
             raise HTTPException(status_code=400, detail="Ảnh không được để trống")
+        if not image.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                raise HTTPException(status_code=400, detail="Ảnh phải có định dạng .jpg, .jpeg hoặc .png")
         if not user_id:
             raise HTTPException(status_code=400, detail="ID người dùng không được để trống")
         #Tìm kiếm người dùng trong cơ sở dữ liệu
         # user = user_collection.find_one({"_id": user_id})
         # if not user:
         #     raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
+        download_all_required_files()
+        # download_from_gcs()
+        # print("Đã tải xong các tệp cần thiết.")
+        
         print ("Bắt đầu quá trình chẩn đoán...")
         print("Đang tải các tệp cần thiết từ Google Cloud Storage...")
-        # download_all_required_files()
-        # download_from_gcs()
-        print("Đã tải xong các tệp cần thiết.")
-        if not image.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                raise HTTPException(status_code=400, detail="Ảnh phải có định dạng .jpg, .jpeg hoặc .png")
+        print("Bắt đầu sinh mô tả ảnh bằng Gemini")
         image_data = await image.read()
+        
+        description = generate_description_with_Gemini(image_data)
+        if description == "Không phải ảnh da liễu":
+            print("Không thể sinh mô tả ảnh vì ảnh không phải là ảnh da liễu")
+            raise HTTPException(status_code=400, detail="Ảnh không phải là ảnh da liễu")
+        print("Mô tả ảnh:", description)
         print("Bắt đầu tiền xử lý ảnh")
         preprocessed_pil, preprocessed_np = preprocess_image(image_data)
         print("Đã tiền xử lý ảnh xong")
-        print("Bắt đầu sinh mô tả ảnh bằng Gemini")
-        description = generate_description_with_Gemini(image_data)
-        print("Mô tả ảnh:", description)
         print("\nPhân loại ảnh đầy đủ (Full Image):")
+        #========== TÍNH TOÁN EMBEDDING VÀ TÌM KIẾM ==========
+        test_vector = embed_image_clip(preprocessed_pil)
+        test_results = search_faiss_index(
+            embedding=test_vector,
+            index_path=os.path.join(LOCAL_SAVE_DIR_2, "faiss_index.bin"),
+            label_path=os.path.join(LOCAL_SAVE_DIR_2, "labels.npy"),
+            top_k=15
+        )
+        for label, score in test_results:
+            print(f"  → {label} (score: {score:.4f})")
+
+        test_results_anomaly = search_faiss_anomaly_index(
+            embedding=test_vector,
+            index_path=os.path.join(LOCAL_SAVE_DIR_2, "faiss_index_anomaly.bin"),
+            label_path=os.path.join(LOCAL_SAVE_DIR_2, "labels_anomaly.npy"),
+            top_k=15
+        )
+        for label, score in test_results_anomaly:
+            print(f"  → {label} (score: {score:.4f})")
+
+        test_combined_results = test_results + test_results_anomaly
+
+        label_scores_test ={}
+
+        for label, distance in test_combined_results:
+            similarity = 1 / (1 + distance)
+            label_scores_test[label] = label_scores_test.get(label, 0) + similarity
+
+        # Chuẩn hóa về 100%
+        total_similarity_test = sum(label_scores_test.values())
+        label_scores_percent_test = {label: (score / total_similarity_test) * 100 for label, score in label_scores_test.items()}
+
+        # Sắp xếp
+        sorted_labels_test = sorted(label_scores_percent_test.items(), key=lambda x: x[1], reverse=True)
+        
+
+        print("Tổng điểm similarity sau khi chuẩn hóa (%):")
+        for label, percent in sorted_labels_test:
+            print(f"  → {label}: {percent:.2f}%")
+
+        top_label, top_percent = sorted_labels_test[0]
+        print(f"\nNhãn được chọn (Top-1): {top_label} ({top_percent:.2f}%)")
+        if top_label == "non-infectious diseases":
+            print("Khổng thể chẩn đoán bệnh này vì hiện tại bệnh thuộc vào nhóm bệnh chưa hỗ trợ")
+            raise HTTPException(status_code=400, detail="Không thể chẩn đoán bệnh này vì hiện tại bệnh thuộc vào nhóm bệnh chưa hỗ trợ")
+        
+       
+        
+
         full_image_vector = embed_image_clip(preprocessed_pil)
         full_results = search_faiss_index(
         embedding=full_image_vector,
@@ -248,6 +306,7 @@ async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None
         label_path=os.path.join(LOCAL_SAVE_DIR, "labels.npy"),
         top_k=15
         )
+
         for label, score in full_results:
             print(f"  → {label} (score: {score:.4f})")
         print("\nPhân tích bất thường (Anomaly Detection):")
