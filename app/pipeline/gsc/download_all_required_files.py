@@ -17,8 +17,10 @@ PROCESSED_DIR = "app/static/processed"
 ANOMALY_MAP_DIR = "app/static/anomaly_maps"
 ROI_OUTPUT_DIR = "app/static/roi_outputs"
 GCS_BUCKET = "group_dataset-nt"
+GCS_BUCKET_2 = "rag_3"
 GCS_FOLDER = "handle_data"
 LOCAL_SAVE_DIR = "app/static/"
+LOCAL_SAVE_DIR_2 = "app/processed/"
 GCS_KEY_PATH = storage.Client.from_service_account_json("app/iam-key.json")
 
 REQUIRED_FILES = [
@@ -49,6 +51,14 @@ REQUIRED_FILES = [
     "labels_anomaly_virus.npy"
 ]
 
+REQUIRED_FILES_2 = [
+    "faiss_index.bin",
+    "faiss_index_anomaly.bin",
+    "labels.npy",
+    "labels_anomaly.npy",
+
+]
+
 def get_gcs_client():
     try:
         credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -76,8 +86,8 @@ def download_gcs_file(bucket_name: str, source_blob_name: str, destination_file_
                 logging.error(f"Thất bại sau {retries} lần: {source_blob_name}")
 
 def download_all_required_files():
-    Path(LOCAL_SAVE_DIR).mkdir(parents=True, exist_ok=True)
-    for file in REQUIRED_FILES:
+    Path(LOCAL_SAVE_DIR_2).mkdir(parents=True, exist_ok=True)
+    for file in REQUIRED_FILES_2:
         gcs_path = f"{GCS_FOLDER}/{file}"
-        local_path = os.path.join(LOCAL_SAVE_DIR, file)
-        download_gcs_file(GCS_BUCKET, gcs_path, local_path)
+        local_path = os.path.join(LOCAL_SAVE_DIR_2, file)
+        download_gcs_file(GCS_BUCKET_2, gcs_path, local_path)
