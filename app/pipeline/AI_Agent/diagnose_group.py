@@ -20,7 +20,7 @@ def generate_diagnosis_with_gemini(description, sorted_labels):
         model = genai.GenerativeModel('gemini-2.5-pro')  
         labels_only = [extract_label_name(label) for label in sorted_labels[:30]]
         labels_text = "\n".join([f"- {label}" for label in labels_only])
-        print(labels_text)
+        print(f"label text: {labels_text} \n description: {description}")
         prompt = f"""
 Bạn là một chuyên gia da liễu.
 

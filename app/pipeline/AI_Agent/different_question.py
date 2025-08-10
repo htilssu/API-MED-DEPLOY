@@ -55,6 +55,7 @@ Tôi đang phân vân giữa các bệnh sau: {', '.join(labels)}.
 Yêu cầu:
 - Viết ra 3 câu hỏi nhằm **phân biệt rõ ràng** các bệnh trên.
 - Ưu tiên các câu hỏi giúp xác định hoặc loại trừ bệnh ngay lập tức, tránh hỏi chung chung.
+- Có thể dựa vào triệu chứng bệnh theo từng giai đoạn để đặt câu hỏi.
 - Tập trung vào triệu chứng, dấu hiệu đặc trưng, hoặc yếu tố chỉ có ở một bệnh.
 - Mỗi câu hỏi cần hướng đến triệu chứng, cảm giác, vị trí, thời điểm, diễn tiến... có khả năng **loại trừ bệnh này so với bệnh khác**.
 - Không được hỏi câu chung chung như “bạn có ngứa không?” — thay vào đó hãy hỏi theo cách **giúp nhận diện đặc trưng riêng**.
