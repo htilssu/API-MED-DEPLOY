@@ -1,6 +1,7 @@
 import cv2
 import os
 import numpy as np
+import time
 import torch
 import faiss
 import json
@@ -220,37 +221,39 @@ def normalize_diagnosis(diagnosis: str) -> str:
 
 
 
-async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None):
+async def start_diagnois(image: UploadFile = File(...), user_id: Optional[str] = None):
     try:
+        start_time = time.time()
+        
+        # --- B1: Kiểm tra input ---
+        step_start = time.time()
         if not image:
             raise HTTPException(status_code=400, detail="Ảnh không được để trống")
         if not image.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                raise HTTPException(status_code=400, detail="Ảnh phải có định dạng .jpg, .jpeg hoặc .png")
+            raise HTTPException(status_code=400, detail="Ảnh phải có định dạng .jpg, .jpeg hoặc .png")
         if not user_id:
             raise HTTPException(status_code=400, detail="ID người dùng không được để trống")
-        #Tìm kiếm người dùng trong cơ sở dữ liệu
-        # user = user_collection.find_one({"_id": user_id})
-        # if not user:
-        #     raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
-        download_all_required_files()
-        # download_from_gcs()
-        # print("Đã tải xong các tệp cần thiết.")
-        
-        print ("Bắt đầu quá trình chẩn đoán...")
-        print("Đang tải các tệp cần thiết từ Google Cloud Storage...")
-        print("Bắt đầu sinh mô tả ảnh bằng Gemini")
+        print(f"[TIME] Kiểm tra input: {time.time() - step_start:.3f} giây")
+
+        # --- B2: Đọc ảnh ---
+        step_start = time.time()
         image_data = await image.read()
+        print(f"[TIME] Đọc ảnh: {time.time() - step_start:.3f} giây")
         
+        # --- B3: Sinh mô tả bằng Gemini ---
+        step_start = time.time()
         description = generate_description_with_Gemini(image_data)
-        if description == "Không phải ảnh da liễu":
-            print("Không thể sinh mô tả ảnh vì ảnh không phải là ảnh da liễu")
+        print(f"[TIME] Sinh mô tả ảnh: {time.time() - step_start:.3f} giây")
+        if description in ["Không phải ảnh da liễu", "Không phải ảnh da liễu."]:
             raise HTTPException(status_code=400, detail="Ảnh không phải là ảnh da liễu")
-        print("Mô tả ảnh:", description)
-        print("Bắt đầu tiền xử lý ảnh")
+
+        # --- B4: Tiền xử lý ảnh ---
+        step_start = time.time()
         preprocessed_pil, preprocessed_np = preprocess_image(image_data)
-        print("Đã tiền xử lý ảnh xong")
-        print("\nPhân loại ảnh đầy đủ (Full Image):")
-        #========== TÍNH TOÁN EMBEDDING VÀ TÌM KIẾM ==========
+        print(f"[TIME] Tiền xử lý ảnh: {time.time() - step_start:.3f} giây")
+        
+        # --- B5: Tính embedding và tìm kiếm ban đầu ---
+        step_start = time.time()
         test_vector = embed_image_clip(preprocessed_pil)
         test_results = search_faiss_index(
             embedding=test_vector,
@@ -258,61 +261,44 @@ async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None
             label_path=os.path.join(LOCAL_SAVE_DIR_2, "labels.npy"),
             top_k=15
         )
-        for label, score in test_results:
-            print(f"  → {label} (score: {score:.4f})")
-
         test_results_anomaly = search_faiss_anomaly_index(
             embedding=test_vector,
             index_path=os.path.join(LOCAL_SAVE_DIR_2, "faiss_index_anomaly.bin"),
             label_path=os.path.join(LOCAL_SAVE_DIR_2, "labels_anomaly.npy"),
             top_k=15
         )
-        for label, score in test_results_anomaly:
-            print(f"  → {label} (score: {score:.4f})")
+        print(f"[TIME] Tìm kiếm embedding ban đầu: {time.time() - step_start:.3f} giây")
 
+        # --- B6: Kết hợp kết quả ban đầu ---
+        step_start = time.time()
         test_combined_results = test_results + test_results_anomaly
-
-        label_scores_test ={}
-
+        label_scores_test = {}
         for label, distance in test_combined_results:
             similarity = 1 / (1 + distance)
             label_scores_test[label] = label_scores_test.get(label, 0) + similarity
-
-        # Chuẩn hóa về 100%
         total_similarity_test = sum(label_scores_test.values())
         label_scores_percent_test = {label: (score / total_similarity_test) * 100 for label, score in label_scores_test.items()}
-
-        # Sắp xếp
         sorted_labels_test = sorted(label_scores_percent_test.items(), key=lambda x: x[1], reverse=True)
-        
+        print(f"[TIME] Xử lý kết quả ban đầu: {time.time() - step_start:.3f} giây")
 
-        print("Tổng điểm similarity sau khi chuẩn hóa (%):")
-        for label, percent in sorted_labels_test:
-            print(f"  → {label}: {percent:.2f}%")
-
-        top_label, top_percent = sorted_labels_test[0]
-        print(f"\nNhãn được chọn (Top-1): {top_label} ({top_percent:.2f}%)")
-        if top_label == "non-infectious diseases":
-            print("Khổng thể chẩn đoán bệnh này vì hiện tại bệnh thuộc vào nhóm bệnh chưa hỗ trợ")
+        if sorted_labels_test[0][0] == "non-infectious diseases":
             raise HTTPException(status_code=400, detail="Không thể chẩn đoán bệnh này vì hiện tại bệnh thuộc vào nhóm bệnh chưa hỗ trợ")
-        
-       
-        
 
+        # --- B7: Tìm kiếm full image ---
+        step_start = time.time()
         full_image_vector = embed_image_clip(preprocessed_pil)
         full_results = search_faiss_index(
-        embedding=full_image_vector,
-        index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index.bin"),
-        label_path=os.path.join(LOCAL_SAVE_DIR, "labels.npy"),
-        top_k=15
+            embedding=full_image_vector,
+            index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index.bin"),
+            label_path=os.path.join(LOCAL_SAVE_DIR, "labels.npy"),
+            top_k=15
         )
+        print(f"[TIME] Tìm kiếm full image: {time.time() - step_start:.3f} giây")
 
-        for label, score in full_results:
-            print(f"  → {label} (score: {score:.4f})")
-        print("\nPhân tích bất thường (Anomaly Detection):")
+        # --- B8: Phân tích anomaly ---
+        step_start = time.time()
         anomaly_overlay, anomaly_map = generate_anomaly_overlay(preprocessed_pil)
         overlay_path, anomaly_map_path = save_anomaly_outputs(anomaly_overlay, anomaly_map, image.filename)
-
         anomaly_vector = embed_anomaly_heatmap(overlay_path)
         anomaly_results = search_faiss_anomaly_index(
             embedding=anomaly_vector,
@@ -320,72 +306,67 @@ async def start_diagnois(image:UploadFile = File(...),user_id:Optional[str]=None
             label_path=os.path.join(LOCAL_SAVE_DIR, "labels_anomaly.npy"),
             top_k=15
         )
-        for label, score in anomaly_results:
-            print(f"  → {label} (score: {score:.4f})")
-        # ========== KẾT HỢP KẾT QUẢ ==========
-        print("\nKết hợp kết quả từ Full Image + Anomaly (voting theo % normalize):")
+        print(f"[TIME] Phân tích anomaly: {time.time() - step_start:.3f} giây")
 
+        # --- B9: Kết hợp full image + anomaly ---
+        step_start = time.time()
         combined_results = full_results + anomaly_results
-        # Tính tổng similarity (chưa chuẩn hóa)
         label_scores_raw = {}
         for label, distance in combined_results:
             similarity = 1 / (1 + distance)
             label_scores_raw[label] = label_scores_raw.get(label, 0) + similarity
-
-        # Chuẩn hóa về 100%
         total_similarity = sum(label_scores_raw.values())
         label_scores_percent = {label: (score / total_similarity) * 100 for label, score in label_scores_raw.items()}
-
-        # Sắp xếp
         sorted_labels = sorted(label_scores_percent.items(), key=lambda x: x[1], reverse=True)
+        print(f"[TIME] Kết hợp full image + anomaly: {time.time() - step_start:.3f} giây")
 
-        print("Tổng điểm similarity sau khi chuẩn hóa (%):")
-        for label, percent in sorted_labels:
-            print(f"  → {label}: {percent:.2f}%")
-
-        top_label, top_percent = sorted_labels[0]
-        print(f"\nNhãn được chọn (Top-1): {top_label} ({top_percent:.2f}%)")
-
-        group_name_raw = top_label.split("/")[0]
+        # --- B10: Chẩn đoán với Gemini ---
+        step_start = time.time()
+        group_name_raw = sorted_labels[0][0].split("/")[0]
         normalized_group_name = normalize_group_name(group_name_raw)
-        print(f"Nhóm bệnh (chuẩn hoá): {normalized_group_name}")
-
-        print("\nChẩn đoán nhóm bệnh với Gemini:")
         diagnosis = generate_diagnosis_with_gemini(description, combined_results)
-        print(f"Chẩn đoán nhóm bệnh: {diagnosis}")
+        print(f"[TIME] Chẩn đoán nhóm bệnh gemini: {time.time() - step_start:.3f} giây")
+        
+        step_start = time.time()
         normalized_group_diagnosis = normalize_diagnosis(diagnosis)
-        print(f"Chẩn đoán nhóm bệnh: {format_diagnosis_output(normalized_group_diagnosis)}")
-        combined_results=detailed_group_analysis(
+        print(f"[TIME] Chẩn đoán nhóm bệnh: {time.time() - step_start:.3f} giây")
+
+        # --- B11: Phân tích nhóm bệnh chi tiết ---
+        step_start = time.time()
+        combined_results = detailed_group_analysis(
             image_vector=full_image_vector,
             anomaly_vector=anomaly_vector,
             group_name=normalized_group_diagnosis,
             top_k=15
         )
-        print(f"combined_results: {combined_results}")
-        combined_results_final= [(str(label), float(score)) for label, score in combined_results]
-        print(f"combined_results_final: {combined_results_final}")
-        disease_primary = [label for label, _ in combined_results_final]
-        print(disease_primary)
-        # Lưu kết quả vào redis
-        Key = user_id
+        print(f"[TIME] Phân tích nhóm bệnh chi tiết: {time.time() - step_start:.3f} giây")
+
+        # --- B12: Lưu kết quả vào Redis ---
+        step_start = time.time()
+        disease_primary = [label for label, _ in combined_results]
         result_data = {
             "description": description,
             "disease_primary": disease_primary,
-            "normalized_group_name":normalized_group_diagnosis ,
+            "normalized_group_name": normalized_group_diagnosis,
         }
-        saved = await save_result_to_redis(key=Key, value=result_data)
-        print("Dữ liệu:",saved)
+        saved = await save_result_to_redis(key=user_id, value=result_data)
+        print(f"[TIME] Lưu kết quả vào Redis: {time.time() - step_start:.3f} giây")
+
+        # --- Tổng thời gian ---
+        print(f"[TIME] Tổng thời gian xử lý: {time.time() - start_time:.3f} giây")
+
         if not saved:
             raise HTTPException(status_code=500, detail="Lỗi khi lưu kết quả vào Redis")
-        
+
         return JSONResponse(content=result_data, status_code=200)
+
     except HTTPException as e:
         logger.error(f"Lỗi HTTP: {e.detail}")
         raise e
     except Exception as e:
         logger.error(f"Lỗi trong quá trình chẩn đoán: {e}")
         raise HTTPException(status_code=500, detail="Lỗi trong quá trình chẩn đoán") from e
-    
+
 
 async def get_diagnosis_result(key: str):
     result = await get_result_by_key(key)
@@ -395,6 +376,7 @@ async def get_diagnosis_result(key: str):
 
 async def get_discriminative_questions(key: str):
     try:
+        start_time = time.time()
         if not key:
             raise HTTPException(status_code=400, detail="Key không được để trống")
 
@@ -422,6 +404,7 @@ async def get_discriminative_questions(key: str):
 
         current_data = current_data_json
         current_data["questions"] = questions
+        print(f"[TIME] Tạo câu hỏi phân biệt: {time.time() - start_time:.3f} giây")
 
         await redis_client.set(key, json.dumps(current_data))
         return JSONResponse(content={"questions": questions}, status_code=200)
@@ -450,6 +433,7 @@ async def submit_discriminative_questions(user_answers:str,key:str):
         normalized_group_name = current_data.get("normalized_group_name", "")
         if not description or not disease_primary or not questions:
             raise HTTPException(status_code=404, detail="Không đủ thông tin để đưa ra chẩn đoán cuối cùng")
+        start_time = time.time()
         final_diagnosis = select_final_diagnosis_with_llm(
             caption=description,
             labels=disease_primary,
@@ -459,6 +443,7 @@ async def submit_discriminative_questions(user_answers:str,key:str):
         )
         if not final_diagnosis:
             raise HTTPException(status_code=500, detail="Không thể đưa ra chẩn đoán cuối cùng")
+        print(f"[TIME] Đưa ra chẩn đoán cuối cùng: {time.time() - start_time:.3f} giây")
         # Cập nhật kết quả vào Redis
         current_data["final_diagnosis"] = final_diagnosis
         await redis_client.set(key, json.dumps(current_data))
@@ -609,6 +594,7 @@ async def knowledge(disease_name: str):
         # translated_name= translate_disease_name(disease_name)
         # search_result = search_disease_in_json(LOCAL_DATASET_PATH, translated_name)
         # if not search_result:
+        start_time = time.time()
         medline_result = search_medlineplus(disease_name)
         if medline_result:
             extracted_info = extract_medical_info(medline_result)   
@@ -617,6 +603,7 @@ async def knowledge(disease_name: str):
         if not search_result:
             raise HTTPException(status_code=404, detail=f"Không tìm thấy thông tin cho bệnh: {disease_name}")
         logger.info(f"Tra cứu thông tin bệnh: {disease_name}")
+        print(f"[TIME] Tra cứu thông tin bệnh: {time.time() - start_time:.3f} giây")
         return JSONResponse(content={"disease_info": search_result}, status_code=200)
     except Exception as e:
         logger.error(f"Lỗi khi tra cứu thông tin bệnh: {e}")
