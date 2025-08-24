@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import (auth, checkprocess, diagnose, legithostpital, location, med, paper, tag, uv)
+from app.routes import (auth, checkprocess, diagnose, legithostpital, location, med, paper, tag, uv, user_disease)
 import os
 from dotenv import load_dotenv
 import uvicorn
@@ -31,6 +31,7 @@ async def health_check():
 app.include_router(auth.router, prefix="/api")
 app.include_router(uv.router, prefix="/api")
 app.include_router(diagnose.router, prefix="/api")
+app.include_router(user_disease.router, prefix="/api")
 app.include_router(checkprocess.router, prefix="/api")
 app.include_router(legithostpital.router, prefix="/api")
 app.include_router(location.router, prefix="/api")

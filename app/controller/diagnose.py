@@ -1,4 +1,4 @@
-from app.models.diagnoise import DiagnoseModel
+from app.models.diagnoise import DiagnoseModel, CreateDiagnoseModel
 from fastapi import APIRouter, UploadFile as Upload, File, HTTPException
 from app.db.mongo import db
 from bson import ObjectId
@@ -11,11 +11,11 @@ from bson.errors import InvalidId
 diagnoses_collection = db["diagnoses"]
 
 
-async def create_diagnosis(diagnosis_data: DiagnoseModel):
+async def create_diagnosis(diagnosis_data: CreateDiagnoseModel):
     """
     Tạo một bản ghi chuẩn đoán mới.
     """
-    diagnosis_data_dict = diagnosis_data.dict()
+    diagnosis_data_dict = diagnosis_data.model_dump()
     diagnosis_data_dict["_id"] = ObjectId()  # Tạo ObjectId mới
     result = await diagnoses_collection.insert_one(diagnosis_data_dict)
     return str(result.inserted_id)  # Trả về ID của bản ghi đã tạo
@@ -35,7 +35,7 @@ async def get_user_diagnoses(user_id: str):
     Lấy tất cả các bản ghi chuẩn đoán của người dùng theo userId.
     """
     diagnoses = []
-    async for diagnosis in diagnoses_collection.find({" ": user_id}):
+    async for diagnosis in diagnoses_collection.find({"userId": user_id}):
         diagnosis["_id"] = str(diagnosis["_id"])  # Chuyển _id thành str
         diagnoses.append(DiagnoseModel(**diagnosis))
     return diagnoses
