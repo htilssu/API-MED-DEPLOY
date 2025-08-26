@@ -1,16 +1,10 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-import os
-from dotenv import load_dotenv
-load_dotenv()
 
-MONGODB_URI = os.getenv("MONGO_URI" or None)
-DATABASE_NAME = os.getenv("DATABASE_NAME" or "mydatabase")
-
-
+from app.config.setting import setting
 
 try:
-    client = AsyncIOMotorClient(MONGODB_URI)
-    db = client[DATABASE_NAME]
+    client = AsyncIOMotorClient(setting.MONGO_URI)
+    db = client[setting.DATABASE_NAME]
 except Exception as e:
     print(f"Lỗi kết nối MongoDB: {e}")
     raise
