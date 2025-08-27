@@ -1,16 +1,15 @@
-import os
 import time
 from pathlib import Path
 from google.cloud import storage
-from dotenv import load_dotenv
 import google.generativeai as genai
 from huggingface_hub import login
 import logging
+from app.config.setting import setting
+
 # ---------------------- CẤU HÌNH ----------------------
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-load_dotenv()
-login(token=os.getenv("HUGGINGFACE_TOKEN"))
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+login(token=setting.HUGGINGFACE_TOKEN)
+genai.configure(api_key=setting.GEMINI_API_KEY)
 
 # ---------------------- CONSTANTS ----------------------
 PROCESSED_DIR = "app/static/processed"
@@ -61,7 +60,7 @@ REQUIRED_FILES_2 = [
 
 def get_gcs_client():
     try:
-        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        credentials_path = setting.GOOGLE_APPLICATION_CREDENTIALS
         return storage.Client.from_service_account_json(credentials_path)
     except Exception as e:
         logging.error(f"Lỗi tạo Google Cloud Client: {e}")

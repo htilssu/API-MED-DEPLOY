@@ -1,12 +1,11 @@
-from dotenv import load_dotenv
-import os
 from fastapi import APIRouter, Request, Response
 from app.controller.uv import (check_and_warn_uv)
+from app.config.setting import setting
 
 router = APIRouter()
 
 
-api_key= os.getenv("api_weather")
+api_key = setting.API_WEATHER
 
 @router.get("/uv-index")
 async def uv_index(request: Request, response: Response, lat: float, lon: float):

@@ -1,19 +1,18 @@
 import cv2
-import os
 import numpy as np
 import torch
 from pathlib import Path
 from transformers import CLIPProcessor, CLIPModel
-from dotenv import load_dotenv
 from huggingface_hub import login
 import timm
 from PIL import Image
 import logging
 from app.pipeline.embedding import embed_image_clip
+from app.config.setting import setting
+
 # ---------------------- CẤU HÌNH ----------------------
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-load_dotenv()
-login(token=os.getenv("HUGGINGFACE_TOKEN"))
+login(token=setting.HUGGINGFACE_TOKEN)
 
 PROCESSED_DIR = "app/static/processed"
 ANOMALY_MAP_DIR = "app/static/anomaly_maps"
