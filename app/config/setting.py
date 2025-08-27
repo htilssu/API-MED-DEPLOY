@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import Optional
 
 
@@ -16,8 +17,8 @@ class Setting(BaseSettings):
 
     # Cloudinary Configuration
     CLOUD_NAME: Optional[str] = None
-    api_key: Optional[str] = None
-    api_secret: Optional[str] = None
+    API_KEY: Optional[str] = Field(default=None, alias="api_key")
+    API_SECRET: Optional[str] = Field(default=None, alias="api_secret")
 
     # Email Configuration
     EMAIL_HOST: Optional[str] = None
@@ -26,8 +27,8 @@ class Setting(BaseSettings):
     EMAIL_PASSWORD: Optional[str] = None
 
     # External API Keys
-    api_weather: Optional[str] = None
-    mapbox_key: Optional[str] = None
+    API_WEATHER: Optional[str] = Field(default=None, alias="api_weather")
+    MAPBOX_KEY: Optional[str] = Field(default=None, alias="mapbox_key")
     HUGGINGFACE_TOKEN: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
 
