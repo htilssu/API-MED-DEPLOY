@@ -1,13 +1,11 @@
-import os
 import random
 import logging
-from dotenv import load_dotenv
 import google.generativeai as genai
+from app.config.setting import setting
 
 # ---------------------- CẤU HÌNH ----------------------
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=setting.GEMINI_API_KEY)
 
 def generate_discriminative_questions(
     caption: str,

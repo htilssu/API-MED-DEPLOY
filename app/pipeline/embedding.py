@@ -1,19 +1,17 @@
-import os
 import numpy as np
 import torch
 from transformers import CLIPProcessor, CLIPModel
-from dotenv import load_dotenv
 import google.generativeai as genai
 from huggingface_hub import login
 import timm
 from PIL import Image
 import logging
+from app.config.setting import setting
 
 # ---------------------- CẤU HÌNH ----------------------
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-load_dotenv()
-login(token=os.getenv("HUGGINGFACE_TOKEN"))
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+login(token=setting.HUGGINGFACE_TOKEN)
+genai.configure(api_key=setting.GEMINI_API_KEY)
 
 # ---------------------- CONSTANTS ----------------------
 PROCESSED_DIR = "app/static/processed"

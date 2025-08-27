@@ -7,18 +7,15 @@ import bcrypt
 from fastapi import HTTPException   
 import random
 import smtplib
-import os
 from email.message import EmailMessage
-from dotenv import load_dotenv
 from app.redis_client import redis_client, save_result_to_redis,get_result_by_key
+from app.config.setting import setting
 
 
-load_dotenv()
-
-EMAIL_HOST = os.getenv("EMAIL_HOST")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT"))
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+EMAIL_HOST = setting.EMAIL_HOST
+EMAIL_PORT = setting.EMAIL_PORT
+EMAIL_USER = setting.EMAIL_USER
+EMAIL_PASSWORD = setting.EMAIL_PASSWORD
 
 
 users_collection = db["users"]

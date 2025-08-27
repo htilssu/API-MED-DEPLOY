@@ -2,7 +2,6 @@ from app.models.paper import Paper_Model
 from fastapi import APIRouter, UploadFile as Upload, File, HTTPException
 from app.db.mongo import db
 from bson import ObjectId
-from dotenv import load_dotenv
 from app.config.cloudinary_config import cloudinary
 from io import BytesIO
 from typing import List, Optional
