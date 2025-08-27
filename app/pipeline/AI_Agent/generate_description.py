@@ -3,12 +3,10 @@ import google.generativeai as genai
 from PIL import Image
 from typing import Optional
 import logging
-import os
-from dotenv import load_dotenv
+from app.config.setting import setting
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=setting.GEMINI_API_KEY)
 
 def generate_description_with_Gemini(image_data: bytes):
     try:

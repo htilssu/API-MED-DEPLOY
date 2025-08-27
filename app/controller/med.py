@@ -1,5 +1,4 @@
 import cv2
-import os
 import numpy as np
 import time
 import torch
@@ -8,7 +7,6 @@ import json
 from pathlib import Path
 from google.cloud import storage
 from transformers import CLIPProcessor, CLIPModel
-from dotenv import load_dotenv
 import google.generativeai as genai
 from transformers import pipeline
 from huggingface_hub import login
@@ -42,19 +40,19 @@ from app.pipeline.embedding import embed_image_clip
 from app.pipeline.AI_Agent.different_question import generate_discriminative_questions
 from app.pipeline.AI_Agent.diagnose_group import generate_diagnosis_with_gemini
 from app.pipeline.AI_Agent.final_diagnose import select_final_diagnosis_with_llm
+from app.config.setting import setting
+
 user_collection = db["user"]
 
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-login(token=os.getenv("HUGGINGFACE_TOKEN"))
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+login(token=setting.HUGGINGFACE_TOKEN)
+genai.configure(api_key=setting.GEMINI_API_KEY)
 
 
 app = FastAPI()
-
-load_dotenv()
 
 # ---------------------- CONSTANTS ----------------------
 ROI_OUTPUT_DIR = "app/static/roi_outputs"

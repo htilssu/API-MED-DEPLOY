@@ -1,10 +1,9 @@
-import os
-from dotenv import load_dotenv
 import google.generativeai as genai
 import logging
+from app.config.setting import setting
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=setting.GEMINI_API_KEY)
 
 def select_final_diagnosis_with_llm(
     caption: str,

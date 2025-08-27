@@ -1,13 +1,9 @@
-import os
-
 import cloudinary.uploader
-from dotenv import load_dotenv
-
-load_dotenv()
+from app.config.setting import setting
 
 cloudinary.config(
-    cloud_name=os.getenv("CLOUD_NAME"),
-    api_key=os.getenv("api_key"),
-    api_secret=os.getenv("api_secret"),
+    cloud_name=setting.CLOUD_NAME,
+    api_key=setting.API_KEY,
+    api_secret=setting.API_SECRET,
     secure=True
 )

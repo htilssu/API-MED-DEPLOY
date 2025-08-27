@@ -1,19 +1,17 @@
 from fastapi import APIRouter, UploadFile as Upload, File, HTTPException
 from pydantic import BaseModel
 import requests
-from dotenv import load_dotenv
-load_dotenv()
-import os
 import logging
 import re
 import json
 import google.generativeai as genai
 from typing import List, Dict
 from geopy.geocoders import Nominatim
+from app.config.setting import setting
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-MAPBOX_ACCESS_TOKEN = os.getenv("mapbox_key")
+MAPBOX_ACCESS_TOKEN = setting.MAPBOX_KEY
 logger = logging.getLogger(__name__)
 
 def generate_bbox(lat:float, lng:float, delta=10):

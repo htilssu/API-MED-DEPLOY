@@ -2,13 +2,12 @@ import google.generativeai as genai
 from PIL import Image
 from typing import Optional
 import logging
-import os
-from dotenv import load_dotenv
 import numpy as np
+from app.config.setting import setting
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=setting.GEMINI_API_KEY)
 def extract_label_name(label):
     if isinstance(label, tuple) and isinstance(label[0], (str, np.str_)):
         return str(label[0])
