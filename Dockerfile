@@ -37,7 +37,8 @@ COPY --from=builder /install /usr/local
 COPY . .
 
 # Env Cloud Run yêu cầu
-ENV PORT=8080
+ENV PORT=8000
 
 # Chạy app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "3"]
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 3
+
