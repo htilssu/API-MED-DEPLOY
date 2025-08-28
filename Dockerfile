@@ -18,11 +18,6 @@ COPY . .
 # Sử dụng biến môi trường PORT để chạy đúng cổng Cloud Run yêu cầu
 ENV PORT=8080
 
-EXPOSE 8080
-
-
-# Expose cổng 8080
-
 
 # Chạy ứng dụng bằng uvicorn ở đúng cổng
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "3"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT}", "--workers", "3"]
