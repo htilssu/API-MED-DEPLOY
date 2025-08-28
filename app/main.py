@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from app.routes import (auth, checkprocess, diagnose, legithostpital, location, med, paper, tag, uv)
-import uvicorn
+
 from app.db.mongo import ping_db
+from app.routes import (auth, checkprocess, diagnose, legithostpital, location, paper, tag, uv)
 
 
 @asynccontextmanager
