@@ -36,7 +36,3 @@ app.include_router(location.router, prefix="/api")
 app.include_router(paper.router, prefix="/api")
 app.include_router(tag.router, prefix="/api")
 app.include_router(med.router, prefix="/api")
-
-if __name__ == "__main__":
-    from app.config.setting import setting
-    uvicorn.run("app.main:app", host="0.0.0.0", port=setting.PORT)
