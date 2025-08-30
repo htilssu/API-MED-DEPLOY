@@ -1,3 +1,5 @@
+protobuf
+starlette
 fastapi
 uvicorn[standard]
 pydantic
