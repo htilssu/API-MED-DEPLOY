@@ -18,7 +18,34 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
 # =========================
-# Stage 2: Runtime image
+# Stage 2: Download FAISS indexes
+# =========================
+FROM python:3.12-slim AS downloader
+
+WORKDIR /app
+
+# Install minimal dependencies for downloading
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python dependencies from builder
+COPY --from=builder /install /usr/local
+
+# Copy only files needed for downloading
+COPY scripts/download_faiss_indexes.py scripts/
+
+# Copy IAM key if it exists
+# For production builds, make sure app/iam-key.json exists
+COPY app/iam-key.json app/
+
+# Run download script to get FAISS indexes
+RUN python scripts/download_faiss_indexes.py
+
+
+# =========================
+# Stage 3: Runtime image
 # =========================
 FROM python:3.12-slim
 
@@ -32,6 +59,9 @@ RUN apt-get update && apt-get install -y \
 
 # Copy dependencies từ builder stage
 COPY --from=builder /install /usr/local
+
+# Copy pre-downloaded FAISS indexes from downloader stage
+COPY --from=downloader /app/app/processed /app/app/processed
 
 # Copy code vào
 COPY . .
