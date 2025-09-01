@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from app.db.mongo import ping_db
-from app.routes import (auth, checkprocess, diagnose, legithostpital, location, paper, tag, uv, med)
+from app.routes import (auth, checkprocess, diagnose, legithostpital, location, paper, tag, uv)
 
 
 @asynccontextmanager
@@ -38,4 +38,3 @@ app.include_router(legithostpital.router, prefix="/api")
 app.include_router(location.router, prefix="/api")
 app.include_router(paper.router, prefix="/api")
 app.include_router(tag.router, prefix="/api")
-app.include_router(med.router, prefix="/api")

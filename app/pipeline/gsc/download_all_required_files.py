@@ -19,39 +19,10 @@ ROI_OUTPUT_DIR = "app/static/roi_outputs"
 GCS_BUCKET = "group_dataset-nt"
 GCS_BUCKET_2 = "rag_3"
 GCS_FOLDER = "handle_data"
-LOCAL_SAVE_DIR = "app/static/"
-LOCAL_SAVE_DIR_2 = "app/processed/"
+LOCAL_SAVE_DIR = "app/processed/"
 GCS_KEY_PATH = storage.Client.from_service_account_json("app/iam-key.json")
 
 REQUIRED_FILES = [
-    "faiss_index.bin",
-    "faiss_index_anomaly.bin",
-    
-    "faiss_index_bacterial_infections.bin",
-    "faiss_index_fungal_infections.bin",
-    "faiss_index_parasitic_infections.bin",
-    "faiss_index_virus.bin",
-    
-    "faiss_index_anomaly_bacterial_infections.bin",
-    "faiss_index_anomaly_fungal_infections.bin",
-    "faiss_index_anomaly_parasitic_infections.bin",
-    "faiss_index_anomaly_virus.bin",
-
-    "labels.npy",
-    "labels_anomaly.npy",
-
-    "labels_bacterial_infections.npy",
-    "labels_fungal_infections.npy",
-    "labels_parasitic_infections.npy",
-    "labels_virus.npy",
-
-    "labels_anomaly_bacterial_infections.npy",
-    "labels_anomaly_fungal_infections.npy",
-    "labels_anomaly_parasitic_infections.npy",
-    "labels_anomaly_virus.npy"
-]
-
-REQUIRED_FILES_2 = [
     "faiss_index.bin",
     "faiss_index_anomaly.bin",
     "labels.npy",
@@ -86,8 +57,8 @@ def download_gcs_file(bucket_name: str, source_blob_name: str, destination_file_
                 logging.error(f"Thất bại sau {retries} lần: {source_blob_name}")
 
 def download_all_required_files():
-    Path(LOCAL_SAVE_DIR_2).mkdir(parents=True, exist_ok=True)
-    for file in REQUIRED_FILES_2:
+    Path(LOCAL_SAVE_DIR).mkdir(parents=True, exist_ok=True)
+    for file in REQUIRED_FILES:
         gcs_path = f"{GCS_FOLDER}/{file}"
-        local_path = os.path.join(LOCAL_SAVE_DIR_2, file)
+        local_path = os.path.join(LOCAL_SAVE_DIR, file)
         download_gcs_file(GCS_BUCKET_2, gcs_path, local_path)

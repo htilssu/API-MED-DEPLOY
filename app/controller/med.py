@@ -46,7 +46,7 @@ GCS_DATASET = f"dataset"
 GCS_DATASET_PATH = f"{GCS_DATASET}/dataset.json"
 LOCAL_DATASET_PATH = "app/static/json/dataset.json"
 GCS_BUCKET_2 = "rag_3"
-LOCAL_SAVE_DIR_2 = "app/processed"
+LOCAL_SAVE_DIR_2 = "./index"
 
 GCS_KEY_PATH = storage.Client.from_service_account_json("app/iam-key.json")
 
@@ -263,8 +263,8 @@ async def start_diagnois(image: UploadFile = File(...), user_id: Optional[str] =
         full_image_vector = embed_image_clip(preprocessed_pil)
         full_results = search_faiss_index(
             embedding=full_image_vector,
-            index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index.bin"),
-            label_path=os.path.join(LOCAL_SAVE_DIR, "labels.npy"),
+            index_path=os.path.join(LOCAL_SAVE_DIR_2, "faiss_index.bin"),
+            label_path=os.path.join(LOCAL_SAVE_DIR_2, "labels.npy"),
             top_k=15
         )
         print(f"[TIME] Tìm kiếm full image: {time.time() - step_start:.3f} giây")
@@ -276,8 +276,8 @@ async def start_diagnois(image: UploadFile = File(...), user_id: Optional[str] =
         anomaly_vector = embed_anomaly_heatmap(overlay_path)
         anomaly_results = search_faiss_anomaly_index(
             embedding=anomaly_vector,
-            index_path=os.path.join(LOCAL_SAVE_DIR, "faiss_index_anomaly.bin"),
-            label_path=os.path.join(LOCAL_SAVE_DIR, "labels_anomaly.npy"),
+            index_path=os.path.join(LOCAL_SAVE_DIR_2, "faiss_index_anomaly.bin"),
+            label_path=os.path.join(LOCAL_SAVE_DIR_2, "labels_anomaly.npy"),
             top_k=15
         )
         print(f"[TIME] Phân tích anomaly: {time.time() - step_start:.3f} giây")
