@@ -15,7 +15,6 @@ import timm
 import torch
 from fastapi import File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
-from google.cloud import storage
 from huggingface_hub import login
 from transformers import CLIPProcessor, CLIPModel
 
@@ -47,8 +46,6 @@ GCS_DATASET_PATH = f"{GCS_DATASET}/dataset.json"
 LOCAL_DATASET_PATH = "app/static/json/dataset.json"
 GCS_BUCKET_2 = "rag_3"
 LOCAL_SAVE_DIR_2 = "./index"
-
-GCS_KEY_PATH = storage.Client.from_service_account_json("app/iam-key.json")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
@@ -552,19 +549,6 @@ def extract_medical_info(text: str) -> Dict:
     except Exception as e:
         logger.error(f"Lỗi trích xuất thông tin y khoa: {e}")
         return {}
-
-
-def download_from_gcs():
-    storage_client = GCS_KEY_PATH
-    bucket = storage_client.bucket(GCS_BUCKET)
-    files_to_download = [
-        (GCS_DATASET_PATH, LOCAL_DATASET_PATH),
-    ]
-    for gcs_path, local_path in files_to_download:
-        blob = bucket.blob(gcs_path)
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        blob.download_to_filename(local_path)
-        logger.info(f"Tải về {gcs_path} to {local_path}")
 
 
 async def knowledge(disease_name: str):
