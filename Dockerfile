@@ -48,5 +48,5 @@ RUN ./download_index_files.sh || echo "Warning: Could not download index files d
 ENV PORT=8000
 
 # Chạy app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
 
