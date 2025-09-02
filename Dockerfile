@@ -37,7 +37,7 @@ RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -
 RUN apt-get update -y
 RUN apt-get install -y google-cloud-cli
 RUN mkdir -p ./index2
-RUN gsutil -m cp -r gs://demer/i2/* ./index2
+RUN gsutil -m cp -r gs://demer ./index
 RUN rm -rf /var/lib/apt/lists/*
 
 # Copy dependencies từ builder stage
