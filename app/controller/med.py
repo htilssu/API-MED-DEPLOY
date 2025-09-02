@@ -40,10 +40,8 @@ genai.configure(api_key=setting.GEMINI_API_KEY)
 ROI_OUTPUT_DIR = "app/static/roi_outputs"
 GCS_BUCKET = "group_dataset-nt"
 GCS_FOLDER = "handle_data"
-LOCAL_SAVE_DIR = "app/static/"
+LOCAL_SAVE_DIR = "./index2"
 GCS_DATASET = f"dataset"
-GCS_DATASET_PATH = f"{GCS_DATASET}/dataset.json"
-LOCAL_DATASET_PATH = "app/static/json/dataset.json"
 GCS_BUCKET_2 = "rag_3"
 LOCAL_SAVE_DIR_2 = "./index"
 
