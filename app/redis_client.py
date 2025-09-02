@@ -1,12 +1,10 @@
 import redis.asyncio as redis
 import json
 
-redis_client = redis.Redis(
-    # host="localhost",  # Thay đổi thành địa chỉ Redis server của bạn
-    port=6379,
-    db=0,
-    decode_responses=True  # để tự động decode bytes thành chuỗi
-)
+from app.config.setting import setting
+
+redis_client = redis.Redis.from_url(setting.REDIS_URL)
+
 
 async def save_result_to_redis(key: str, value: dict, expire: int = 3600) -> bool:
     try:
@@ -15,6 +13,7 @@ async def save_result_to_redis(key: str, value: dict, expire: int = 3600) -> boo
     except Exception as e:
         print(f"Lỗi khi lưu Redis: {e}")
         return False
+
 
 async def get_result_by_key(key: str):
     value = await redis_client.get(key)  # cần await

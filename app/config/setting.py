@@ -35,6 +35,8 @@ class Setting(BaseSettings):
     # Google Cloud Configuration
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
 
+    REDIS_URL: Optional[str] = None
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

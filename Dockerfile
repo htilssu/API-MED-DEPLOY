@@ -37,7 +37,7 @@ RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -
 RUN apt-get update -y
 RUN apt-get install -y google-cloud-cli
 RUN mkdir -p ./index
-RUN gsutil -m cp -r gs://demer ./index
+RUN gsutil -m cp -r gs://demer/* ./index
 RUN rm -rf /var/lib/apt/lists/*
 
 # Copy dependencies từ builder stage
@@ -47,10 +47,10 @@ COPY --from=builder /install /usr/local
 COPY . .
 
 # Make download script executable
-RUN #chmod +x download_index_files.sh
+#RUN #chmod +x download_index_files.sh
 
 # Run download script to get index files
-RUN ./download_index_files.sh || echo "Warning: Could not download index files during build. Run ./download_index_files.sh manually if needed."
+#RUN #./download_index_files.sh || echo "Warning: Could not download index files during build. Run ./download_index_files.sh manually if needed."
 
 # Env Cloud Run yêu cầu
 ENV PORT=8000
