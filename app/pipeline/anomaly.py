@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import os
 import torch
 from pathlib import Path
 from transformers import CLIPProcessor, CLIPModel
@@ -57,6 +58,7 @@ def generate_anomaly_overlay(image_pil):
     overlay = cv2.addWeighted(original, 0.6, heatmap, 0.4, 0)
     return overlay, anomaly_map_blur
 
+
 def save_anomaly_outputs(anomaly_overlay, anomaly_map, image_path: str):
     basename = Path(image_path).stem
     roi_output_path = os.path.join(ROI_OUTPUT_DIR, f"{basename}_overlay.jpg")
@@ -69,6 +71,7 @@ def save_anomaly_outputs(anomaly_overlay, anomaly_map, image_path: str):
     cv2.imwrite(anomaly_map_path, anomaly_map)
 
     return roi_output_path, anomaly_map_path
+
 
 def embed_anomaly_heatmap(heatmap_path: str) -> np.ndarray:
     image = Image.open(heatmap_path).convert("RGB")
