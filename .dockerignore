@@ -1,12 +1,10 @@
 __pycache__/
-*.pyc
 .env
 .github
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
@@ -21,7 +19,6 @@ wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
-*.egg
 MANIFEST
 *.manifest
 *.spec
@@ -78,3 +75,6 @@ dmypy.json
 .pyre/
 .pytype/
 cython_debug/
+*.pyo
+*.pyd
+.DS_Store
